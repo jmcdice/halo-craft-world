@@ -59,6 +59,12 @@ export class StageManager {
       case 'midway_dock': return this._midpoint('start', 'dock');
       case 'midway_shore': return this._midpoint('start', 'shore');
       case 'midway_beacon': return this._midpoint('start', 'beacon');
+      case 'pass': return this._mountainPoint();
+      case 'ridge': {
+        const p = this._mountainPoint();
+        const r = 200 / Math.max(Math.hypot(p.x, p.z), 1);
+        return { x: p.x * r, z: p.z * r };
+      }
       default: return { x: 0, z: 0 };
     }
   }
@@ -89,6 +95,20 @@ export class StageManager {
     return best;
   }
 
+  /* a summit out in the true mountains (r≈240), climbable from the bowl */
+  _mountainPoint() {
+    if (this._passCache) return this._passCache;
+    let best = { x: 240, z: 0, h: -1e9 };
+    for (let i = 0; i < 96; i++) {
+      const a = (i / 96) * Math.PI * 2;
+      const x = Math.cos(a) * 240, z = Math.sin(a) * 240;
+      const h = this.game.world.heightAt(x, z);
+      if (h > best.h && h < 70) best = { x, z, h };
+    }
+    this._passCache = best;
+    return best;
+  }
+
   /* ============================ CAMPAIGN ============================ */
   startCampaign(index = 0) {
     this.mode = 'campaign';
@@ -104,6 +124,7 @@ export class StageManager {
     g.world.setTimeOfDay(s.tod);
     g.world.setFogDensity(s.fog);
     g.world.setWaves(s.waves);
+    g.world.playRadius = s.playRadius || 165;
 
     const start = this._clearPoint(this._anchor(s.start), 0.8);
     g.player.spawn(start.x, start.z, 0.63);
@@ -392,6 +413,7 @@ export class StageManager {
     g.world.setTimeOfDay(0.34);
     g.world.setFogDensity(0.42);
     g.world.setWaves(0.42);
+    g.world.playRadius = 165;
     const sp = this._clearPoint({ x: 76, z: 104 }, 0.8);
     g.player.spawn(sp.x, sp.z, 0.63);
     this.objectives = [{ id: 'wave', type: 'wave', label: 'Wave 1', done: false }];
@@ -457,7 +479,7 @@ export class StageManager {
     const out = [];
     for (const o of this.objectives) {
       if (o.done) continue;
-      if (o.type === 'reach' && o.marker) out.push(o.marker);
+      if (o.type === 'reach' && !o.locked && o.marker) out.push(o.marker);
       if (o.type === 'defend' && !o.locked && o.marker) out.push(o.marker);
       if (o.type === 'activate' && !o.locked && o.marker) out.push(o.marker);
     }
@@ -513,7 +535,7 @@ export class StageManager {
     // reach / activate proximity
     for (const o of this.objectives) {
       if (o.done) continue;
-      if (o.type === 'reach' && this._tmp.subVectors(o.pos, player.position).lengthSq() < o.radius * o.radius) {
+      if (o.type === 'reach' && !o.locked && this._tmp.subVectors(o.pos, player.position).lengthSq() < o.radius * o.radius) {
         this._completeObjective(o);
       }
       if (o.type === 'activate' && !o.locked && this._tmp.subVectors(o.pos, player.position).lengthSq() < o.radius * o.radius) {

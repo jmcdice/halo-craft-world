@@ -48,6 +48,9 @@ export class World {
     this._c1 = new THREE.Color(); this._c2 = new THREE.Color(); this._fogC = new THREE.Color();
     this._n = new THREE.Vector3();
 
+    // playable boundary; stages may widen it (e.g. into the mountains)
+    this.playRadius = 165;
+
     this.currentDusk = 0;
     this.setTimeOfDay(0.32);   // default: bright morning for combat readability
     this.setFogDensity(0.42);

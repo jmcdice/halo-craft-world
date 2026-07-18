@@ -110,6 +110,40 @@ export const STAGES = [
     ],
   },
   {
+    title: 'The Pass',
+    subtitle: 'INSTALLATION 04 — 19:40',
+    tod: 0.84, fog: 0.55, waves: 0.4,
+    start: 'beacon',
+    playRadius: 275,          // opens the true mountains beyond the bowl
+    intro: [
+      'The Cartographer is sealed. There’s a Forerunner relay up in the peaks that can crack it.',
+      'That means going over the mountains, Chief. Follow the ridge line.',
+      'Air’s thin, cover’s thinner. The Covenant own the high ground — take it from them.',
+    ],
+    outro: ['Relay’s burning bright. The Cartographer is unlocked — one door left, Chief.'],
+    objectives: [
+      { id: 'reach_ridge', type: 'reach', label: 'Climb to the ridge line', anchor: 'ridge', radius: 12 },
+      { id: 'pass_patrol', type: 'eliminate', label: 'Clear the summit guard', count: 5,
+        spawn: { types: ['drone', 'drone', 'elite', 'grunt', 'drone'], anchor: 'pass', minR: 12, maxR: 30, after: 'reach_ridge', via: 'dropship' } },
+      { id: 'light_relay', type: 'activate', label: 'Light the relay', anchor: 'pass', radius: 8, requires: ['pass_patrol'] },
+    ],
+    events: [
+      { delay: 5, do: [{ say: ['The relay is above the snow line. Keep climbing — and mind the drop.'] }] },
+      { zone: 'ridge', radius: 32, do: [
+        { banner: 'CONTACT HIGH' },
+        { say: ['Drones on the ridge — they patrol these peaks. Knock them down!'] },
+        { dropship: { types: ['drone', 'drone'], anchor: 'ridge', minR: 10, maxR: 18 } },
+      ] },
+      { objectiveDone: 'reach_ridge', do: [
+        { banner: 'SUMMIT GUARD INBOUND' },
+        { say: ['Phantom rising over the crest — the summit guard knows we’re here.'] },
+      ] },
+      { progress: { id: 'pass_patrol', count: 3 }, do: [
+        { say: ['Almost through them. The relay’s just past the crest.'] },
+      ] },
+    ],
+  },
+  {
     title: 'The Cartographer',
     subtitle: 'INSTALLATION 04 — 22:00',
     tod: 0.96, fog: 0.45, waves: 0.35,

@@ -167,6 +167,14 @@ export class Game {
       this.hud.updatePlayer(this.player);
       this.hud.updateWaypoints(this.stages.markers(), this.player.position);
       this.hud.updateRadar(this.player, this.enemies, this.stages.markers(), dt);
+
+      // score follows the fight: intensity from how many enemies are engaged
+      if (time - (this._musicTick || 0) > 800) {
+        this._musicTick = time;
+        let engaged = 0;
+        for (const e of this.enemies.list) if (e.alive && e.state > 0) engaged++;
+        this.ambient.setMusicIntensity(Math.min(1, engaged / 3));
+      }
     } else if (this.running) {
       // keep entities idle-updating for reflection consistency but don't advance combat hard
       this.projectiles.update(dt, this.enemies, this.player);

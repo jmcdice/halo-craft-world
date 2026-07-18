@@ -160,7 +160,7 @@ export class EnemyManager {
       const a = Math.random() * Math.PI * 2;
       const rr = minR + Math.random() * (maxR - minR);
       const x = cx + Math.cos(a) * rr, z = cz + Math.sin(a) * rr;
-      if (Math.hypot(x, z) > 160) continue;
+      if (Math.hypot(x, z) > this.world.playRadius - 5) continue;
       if (this.world.heightAt(x, z) < 0.6) continue;
       if (!this.world.isClear(x, z, clearance)) continue;   // don't spawn inside trees/rocks
       return this.spawn(type, x, z);
@@ -227,7 +227,8 @@ export class EnemyManager {
         if (!e.patrolTarget || e.position.distanceTo(e.patrolTarget) < 2.5) {
           const a = Math.random() * Math.PI * 2, rr = 8 + Math.random() * 20;
           let tx = e.position.x + Math.cos(a) * rr, tz = e.position.z + Math.sin(a) * rr;
-          const R = Math.hypot(tx, tz); if (R > 155) { tx *= 155 / R; tz *= 155 / R; }
+          const pr = this.world.playRadius - 10;
+          const R = Math.hypot(tx, tz); if (R > pr) { tx *= pr / R; tz *= pr / R; }
           e.patrolTarget = new THREE.Vector3(tx, 0, tz);
         }
         moveVec = this._sep.subVectors(e.patrolTarget, e.position); moveVec.y = 0; moveVec.normalize().multiplyScalar(0.55);
@@ -243,7 +244,8 @@ export class EnemyManager {
         if ((c.x !== nx || c.z !== nz) && e.state === STATE.PATROL && Math.random() < dt * 2) e.patrolTarget = null;
         nx = c.x; nz = c.z;
       }
-      const R = Math.hypot(nx, nz); if (R > 158) { nx *= 158 / R; nz *= 158 / R; }
+      const pr = this.world.playRadius - 7;
+      const R = Math.hypot(nx, nz); if (R > pr) { nx *= pr / R; nz *= pr / R; }
       const speedNow = Math.hypot(nx - e.position.x, nz - e.position.z) / (dt || 1e-3);
       e.position.x = nx; e.position.z = nz;
       const groundY = Math.max(this.world.heightAt(e.position.x, e.position.z), this.world.waterLevel);

@@ -131,8 +131,8 @@ export class Player {
     const col = this.world.collide(this.position.x, this.position.z, RADIUS);
     this.position.x = col.x; this.position.z = col.z;
 
-    // keep inside the playable bowl
-    const maxR = 165;
+    // keep inside the playable boundary (stage-configurable)
+    const maxR = this.world.playRadius;
     const r = Math.hypot(this.position.x, this.position.z);
     if (r > maxR) { this.position.x *= maxR / r; this.position.z *= maxR / r; }
 
