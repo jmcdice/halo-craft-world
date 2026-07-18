@@ -13,6 +13,7 @@ const STATE = { PATROL: 0, CHASE: 1, ATTACK: 2 };
 const TYPES = {
   grunt: { health: 40, speed: 3.8, sight: 90, range: 32, cooldown: 1100, damage: 8, radius: 0.6, height: 1.5, score: 10, color: 0xd98a2b, accent: 0x5a3410, eye: 0xff7a1a },
   elite: { health: 120, speed: 4.6, sight: 110, range: 40, cooldown: 850, damage: 14, radius: 0.7, height: 2.2, score: 30, color: 0x3550c8, accent: 0x161f52, eye: 0x66ddff },
+  drone: { health: 30, speed: 7.5, sight: 110, range: 26, cooldown: 650, damage: 6, radius: 0.5, height: 1.0, score: 15, color: 0x8a93a8, accent: 0x2a3140, eye: 0xff3355, hover: 3.4 },
 };
 
 function mat(color, opts = {}) { return new THREE.MeshStandardMaterial({ color, roughness: 0.6, metalness: 0.15, ...opts }); }
@@ -25,6 +26,21 @@ function buildBody(type) {
   const skin = mat(t.color), dark = mat(t.accent);
   const eyeMat = new THREE.MeshStandardMaterial({ color: t.eye, emissive: t.eye, emissiveIntensity: 1.6, roughness: 0.3 });
 
+  if (type === 'drone') {
+    // Sentinel-style flyer: metal core, red eye, side fins, spinning vane
+    const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.45, 0), skin);
+    core.scale.set(1, 0.75, 1.4); core.castShadow = true; g.add(core);
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 8), eyeMat);
+    eye.position.set(0, 0, 0.55); g.add(eye);
+    [-1, 1].forEach(s => {
+      const fin = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.06, 0.34), dark);
+      fin.position.set(s * 0.62, 0.12, -0.1); fin.rotation.z = s * 0.35; fin.castShadow = true; g.add(fin);
+    });
+    const vane = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.05, 6, 12), dark);
+    vane.rotation.x = Math.PI / 2; vane.position.y = 0.34; g.add(vane);
+    parts.vane = vane;
+    return { group: g, parts };
+  }
   if (type === 'grunt') {
     // hunched torso
     const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.42, 0.4, 4, 8), skin);
@@ -85,7 +101,7 @@ class Enemy {
       range: t.range, cooldown: t.cooldown, damage: t.damage, radius: t.radius,
       height: t.height, score: t.score, state: STATE.PATROL, lastShot: 0,
       patrolTarget: null, alive: true, animPhase: Math.random() * 6, moving: false,
-      hitFlash: 0,
+      hitFlash: 0, hover: t.hover || 0, objectiveId: null,
     });
     const body = buildBody(type);
     this.mesh = body.group; this.parts = body.parts;
@@ -131,7 +147,7 @@ export class EnemyManager {
   }
 
   spawn(type, x, z) {
-    const y = this.world.heightAt(x, z);
+    const y = Math.max(this.world.heightAt(x, z), this.world.waterLevel) + (TYPES[type].hover || 0);
     const e = new Enemy(type, new THREE.Vector3(x, y, z));
     this.scene.add(e.mesh);
     this.list.push(e);
@@ -202,9 +218,10 @@ export class EnemyManager {
         moveVec = toPlayer;
         e.hpBar.visible = true;   // reveal bar once engaged
       } else if (e.state === STATE.ATTACK) {
-        // in range: strafe sideways to feel alive
+        // in range: strafe sideways to feel alive (drones orbit harder)
         toPlayer.y = 0; toPlayer.normalize();
-        moveVec = this._sep.set(-toPlayer.z, 0, toPlayer.x).multiplyScalar(Math.sin(time * 0.002 + e.animPhase));
+        const orbit = e.hover ? 1 : Math.sin(time * 0.002 + e.animPhase);
+        moveVec = this._sep.set(-toPlayer.z, 0, toPlayer.x).multiplyScalar(orbit);
       } else {
         // patrol: keep wandering to fresh points so they always move
         if (!e.patrolTarget || e.position.distanceTo(e.patrolTarget) < 2.5) {
@@ -216,11 +233,11 @@ export class EnemyManager {
         moveVec = this._sep.subVectors(e.patrolTarget, e.position); moveVec.y = 0; moveVec.normalize().multiplyScalar(0.55);
       }
 
-      // apply movement, avoiding deep water
+      // apply movement; walkers avoid deep water, drones fly over it
       const spd = e.speed * (e.state === STATE.PATROL ? 1 : 1);
       let nx = e.position.x + moveVec.x * spd * dt;
       let nz = e.position.z + moveVec.z * spd * dt;
-      if (this.world.heightAt(nx, nz) < 0.4) { e.patrolTarget = null; nx = e.position.x; nz = e.position.z; }
+      if (!e.hover && this.world.heightAt(nx, nz) < 0.4) { e.patrolTarget = null; nx = e.position.x; nz = e.position.z; }
       { // slide around tree trunks / boulders instead of clipping through
         const c = this.world.collide(nx, nz, e.radius);
         if ((c.x !== nx || c.z !== nz) && e.state === STATE.PATROL && Math.random() < dt * 2) e.patrolTarget = null;
@@ -229,7 +246,13 @@ export class EnemyManager {
       const R = Math.hypot(nx, nz); if (R > 158) { nx *= 158 / R; nz *= 158 / R; }
       const speedNow = Math.hypot(nx - e.position.x, nz - e.position.z) / (dt || 1e-3);
       e.position.x = nx; e.position.z = nz;
-      e.position.y = Math.max(this.world.heightAt(e.position.x, e.position.z), this.world.waterLevel);
+      const groundY = Math.max(this.world.heightAt(e.position.x, e.position.z), this.world.waterLevel);
+      if (e.hover) {
+        const targetY = groundY + e.hover + Math.sin(time * 0.0021 + e.animPhase) * 0.6;
+        e.position.y += (targetY - e.position.y) * Math.min(1, dt * 3);
+      } else {
+        e.position.y = groundY;
+      }
       e.mesh.position.copy(e.position);
 
       // face travel / player
@@ -244,6 +267,7 @@ export class EnemyManager {
       if (e.parts.legL) { e.parts.legL.rotation.x = sw; e.parts.legR.rotation.x = sw2; }
       if (e.parts.armL) { e.parts.armL.rotation.x = sw2 * 0.7; e.parts.armR.rotation.x = sw * 0.7; }
       if (e.parts.head && e.state !== STATE.PATROL) e.parts.head.rotation.x = 0.1;
+      if (e.parts.vane) { e.parts.vane.rotation.z += dt * 9; e.mesh.rotation.z = Math.sin(time * 0.0018 + e.animPhase) * 0.14; }
 
       // health bar faces camera automatically (Sprite); keep it slightly above
       // shoot

@@ -74,6 +74,12 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #05080c;
 #health-bar { height: 6px; }
 #health-bar i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #3aa05a, var(--health)); transition: width 0.2s linear; }
 
+/* boss health bar */
+#hud-boss { position: fixed; top: 58px; left: 50%; transform: translateX(-50%); width: 380px; text-align: center; }
+#hud-boss span { font-size: 11px; letter-spacing: 0.4em; color: #ff8a8a; text-shadow: 0 0 12px rgba(255, 60, 60, 0.6); }
+#boss-bar { margin-top: 4px; height: 8px; background: rgba(0, 0, 0, 0.5); border: 1px solid rgba(255, 90, 90, 0.5); border-radius: 3px; overflow: hidden; }
+#boss-bar i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #a02020, #ff4c4c); transition: width 0.15s linear; }
+
 #hud-weapon { position: fixed; bottom: 26px; right: 34px; text-align: right; }
 #weapon-name { display: block; font-size: 13px; letter-spacing: 0.3em; color: var(--hud-dim); }
 #ammo { font-size: 34px; font-weight: 700; letter-spacing: 0.04em; }
@@ -155,6 +161,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #05080c;
   .briefing-inner { max-width: 90vw; padding: 26px 24px; }
   .briefing-title { font-size: 28px; }
   #hud-shield { width: 190px; top: 14px; }
+  #hud-boss { width: 56vw; top: 38px; }
   #hud-objectives { top: 64px; right: 14px; width: 44vw; }
   #hud-objectives li { font-size: 12px; }
   #hud-score { top: 14px; right: 14px; font-size: 17px; }
