@@ -5,11 +5,22 @@ import { STAGES } from './stages.js';
    StageManager — loads campaign stages, resolves anchors,
    spawns enemies/collectibles/consoles, tracks objective
    completion, and advances the campaign. Also drives Skirmish.
+
+   Set-piece layer:
+   - a declarative event engine (stage.events): zone / delay /
+     objectiveDone / progress triggers firing say / banner /
+     spawn / dropship actions
+   - deferred eliminate spawns (spec.spawn.after) so encounters
+     start when the script says, not at stage load
+   - 'defend' objectives: hold a glowing zone while timed waves
+     arrive by dropship
+   - boss phases: dropship arrival, HUD health bar, enrage +
+     summons at half health
    ============================================================ */
 
 export class StageManager {
   constructor(game) {
-    this.game = game;                // { world, scene, enemies, projectiles, player, cortana, hud }
+    this.game = game;                // { world, scene, enemies, projectiles, player, cortana, hud, dropships }
     this.stageIndex = -1;
     this.stage = null;
     this.objectives = [];
@@ -18,6 +29,10 @@ export class StageManager {
     this.mode = 'campaign';          // 'campaign' | 'skirmish'
     this.active = false;
     this.skirmishWave = 0;
+    this.boss = null;
+    this._events = [];
+    this._elapsed = 0;
+    this._hudTick = 0;
     this._tmp = new THREE.Vector3();
 
     this.game.enemies.onKill = (e) => this._onKill(e);
@@ -41,8 +56,16 @@ export class StageManager {
         const a = 4.2, r = w.shoreRadiusAt(a) + 34;
         return { x: Math.cos(a) * r, z: Math.sin(a) * r };
       }
+      case 'midway_dock': return this._midpoint('start', 'dock');
+      case 'midway_shore': return this._midpoint('start', 'shore');
+      case 'midway_beacon': return this._midpoint('start', 'beacon');
       default: return { x: 0, z: 0 };
     }
+  }
+
+  _midpoint(a, b) {
+    const p = this._anchor(a), q = this._anchor(b);
+    return { x: (p.x + q.x) / 2, z: (p.z + q.z) / 2 };
   }
 
   /* nudge a point out of trees/rocks (and keep it on land) */
@@ -85,8 +108,9 @@ export class StageManager {
     const start = this._clearPoint(this._anchor(s.start), 0.8);
     g.player.spawn(start.x, start.z, 0.63);
 
-    // build objectives
+    // build objectives + scripted events
     this.objectives = s.objectives.map(spec => this._buildObjective(spec));
+    this._initEvents();
     this.active = false;   // becomes true after briefing "DEPLOY"
 
     // briefing screen + cortana queued to play on deploy
@@ -104,7 +128,8 @@ export class StageManager {
   }
 
   _buildObjective(spec) {
-    const o = { ...spec, done: false, progress: 0, marker: null };
+    const o = { ...spec, done: false, progress: 0, marker: null, baseLabel: spec.label };
+    if (spec.requires?.length) o.locked = true;
     if (spec.type === 'reach' || spec.type === 'activate') {
       const p = this._anchor(spec.anchor);
       o.pos = new THREE.Vector3(p.x, this.game.world.heightAt(p.x, p.z), p.z);
@@ -112,23 +137,135 @@ export class StageManager {
       o.marker = { pos: o.pos, label: spec.label, color: spec.type === 'activate' ? 0xffcf5c : 0x8ffcff };
     } else if (spec.type === 'eliminate') {
       o.remaining = spec.count;
-      this._spawnEnemies(spec);
+      if (!spec.spawn?.after) this._spawnEnemies(spec);   // scripted specs wait for their cue
     } else if (spec.type === 'collect') {
       o.remaining = spec.count;
       this._spawnCores(spec);
+    } else if (spec.type === 'defend') {
+      const p = this._clearPoint(this._anchor(spec.anchor), 2.5);
+      o.pos = new THREE.Vector3(p.x, this.game.world.heightAt(p.x, p.z), p.z);
+      o.timer = spec.duration;
+      o.marker = { pos: o.pos, label: spec.label, color: 0x8ffcff };
+      o._waveIdx = 0; o._waveIn = 0;   // first wave fires as soon as it activates
+      if (!o.locked) this._activateDefend(o);
     }
     return o;
   }
 
+  /* ---- enemy groups (instant or by dropship) ---- */
   _spawnEnemies(spec) {
     const s = spec.spawn; if (!s) return;
     const a = this._anchor(s.anchor);
     const half = s.boss ? s.types : s.types.slice(0, Math.ceil(s.types.length / (s.reinforce ? 2 : 1)));
     this._reinforcePool = s.reinforce ? s.types.slice(half.length) : [];
     this._reinforceSpec = s;
-    for (const t of half) {
-      const e = this.game.enemies.spawnNear(t, a.x, a.z, s.minR, s.maxR);
-      if (s.boss) { e.health = e.maxHealth = 260; e.mesh.scale.setScalar(1.6); e.damage = 22; e.isBoss = true; }
+    this._reinforceId = spec.id;
+    const group = { types: half, x: a.x, z: a.z, minR: s.minR, maxR: s.maxR, credit: spec.id, boss: s.boss };
+    if (s.via === 'dropship') this._deliverGroup(group);
+    else this._spawnGroup(group);
+  }
+
+  _tagger(credit, boss) {
+    return (e) => {
+      e.objectiveId = credit || 'none';
+      if (boss) {
+        e.health = e.maxHealth = 320;
+        e.mesh.scale.setScalar(1.6);
+        e.damage = 22; e.speed *= 1.05; e.isBoss = true;
+        this.boss = e;
+        this.game.hud.showBoss('FIELD MARSHAL');
+      }
+    };
+  }
+
+  _spawnGroup({ types, anchor, x, z, minR = 8, maxR = 20, credit = null, boss = false }) {
+    if (anchor) ({ x, z } = this._anchor(anchor));
+    const tag = this._tagger(credit, boss);
+    for (const t of types) tag(this.game.enemies.spawnNear(t, x, z, minR, maxR));
+  }
+
+  _deliverGroup({ types, anchor, x, z, minR = 8, maxR = 20, credit = null, boss = false }) {
+    if (anchor) ({ x, z } = this._anchor(anchor));
+    const ang = Math.random() * Math.PI * 2, rr = minR + Math.random() * (maxR - minR);
+    this.game.dropships.deliver(types, x + Math.cos(ang) * rr, z + Math.sin(ang) * rr, this._tagger(credit, boss));
+  }
+
+  /* ---- scripted events ---- */
+  _initEvents() {
+    this._elapsed = 0;
+    this._events = (this.stage?.events || []).map(ev => {
+      const e = { ...ev, fired: false };
+      if (e.zone) e.zonePos = this._anchor(e.zone);
+      return e;
+    });
+  }
+
+  _checkEvents() {
+    const player = this.game.player;
+    for (const ev of this._events) {
+      if (ev.fired) continue;
+      let hit = false;
+      if (ev.zone) hit = Math.hypot(player.position.x - ev.zonePos.x, player.position.z - ev.zonePos.z) < ev.radius;
+      else if (ev.delay !== undefined) hit = this._elapsed >= ev.delay;
+      else if (ev.objectiveDone) hit = this.objectives.find(o => o.id === ev.objectiveDone)?.done === true;
+      else if (ev.progress) hit = (this.objectives.find(o => o.id === ev.progress.id)?.progress || 0) >= ev.progress.count;
+      if (!hit) continue;
+      ev.fired = true;
+      this._runActions(ev.do || []);
+    }
+  }
+
+  _runActions(actions) {
+    for (const a of actions) {
+      if (a.say) this.game.cortana.say(a.say);
+      if (a.banner) this.game.hud.banner(a.banner);
+      if (a.spawn) this._spawnGroup(a.spawn);
+      if (a.dropship) this._deliverGroup(a.dropship);
+    }
+  }
+
+  /* ---- defend zones ---- */
+  _activateDefend(o) {
+    o.locked = false;
+    const geo = new THREE.RingGeometry(o.radius - 0.9, o.radius, 48);
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0x8ffcff, transparent: true, opacity: 0.45, side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    o.ring = new THREE.Mesh(geo, mat);
+    o.ring.rotation.x = -Math.PI / 2;
+    o.ring.position.set(o.pos.x, o.pos.y + 0.4, o.pos.z);
+    this.game.scene.add(o.ring);
+  }
+
+  _updateDefend(o, dt, time) {
+    const player = this.game.player;
+    const inside = !player.dead &&
+      Math.hypot(player.position.x - o.pos.x, player.position.z - o.pos.z) < o.radius;
+
+    if (inside) o.timer = Math.max(0, o.timer - dt);
+    if (o.ring) {
+      o.ring.material.color.setHex(inside ? 0x8ffcff : 0xffb04c);
+      o.ring.material.opacity = 0.35 + 0.2 * Math.sin(time * 0.004);
+    }
+
+    // timed waves, delivered by dropship, capped so it never floods
+    o._waveIn -= dt;
+    if (o.timer > 3 && o._waveIn <= 0 && this.game.enemies.aliveCount < 7) {
+      const waves = o.waves.types;
+      const types = waves[o._waveIdx % waves.length];
+      o._waveIdx++;
+      o._waveIn = o.waves.every;
+      this._deliverGroup({ types, x: o.pos.x, z: o.pos.z, minR: o.waves.minR ?? 16, maxR: o.waves.maxR ?? 28 });
+    }
+
+    // live countdown in the objective list (throttled)
+    const t = Math.ceil(o.timer);
+    o.label = `${o.baseLabel} — ${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}${inside ? '' : ' · RETURN TO THE ZONE'}`;
+
+    if (o.timer <= 0) {
+      if (o.ring) { this.game.scene.remove(o.ring); o.ring = null; }
+      this._completeObjective(o);
     }
   }
 
@@ -146,6 +283,8 @@ export class StageManager {
       core.position.set(x, y, z);
       this.game.scene.add(core);
       this.collectibles.push({ mesh: core, pos: core.position, taken: false });
+      // every core is guarded — recovering them is a fight, not a stroll
+      if (spec.guards) this._spawnGroup({ types: spec.guards, x, z, minR: 5, maxR: 12 });
     }
   }
 
@@ -177,19 +316,26 @@ export class StageManager {
   }
 
   _onKill(e) {
-    // credit the active eliminate objective
-    const obj = this.objectives.find(o => o.type === 'eliminate' && !o.done);
-    if (obj) {
+    // tagged kills credit their own objective; untagged fall back to the
+    // first active eliminate (skirmish, legacy, and test spawns)
+    let obj;
+    if (e.objectiveId) obj = this.objectives.find(o => o.id === e.objectiveId && !o.done);
+    else obj = this.objectives.find(o => o.type === 'eliminate' && !o.done);
+    if (obj && obj.type === 'eliminate') {
       obj.remaining = Math.max(0, obj.remaining - 1);
       obj.progress = obj.count - obj.remaining;
-      // reinforcements
-      if (this._reinforcePool && this._reinforcePool.length && obj.remaining <= this._reinforcePool.length) {
-        const t = this._reinforcePool.shift();
-        const a = this._anchor(this._reinforceSpec.anchor);
-        this.game.enemies.spawnNear(t, a.x, a.z, this._reinforceSpec.minR, this._reinforceSpec.maxR);
+      // reinforcements arrive as one dramatic batch when the field thins out
+      if (this._reinforcePool?.length && obj.id === this._reinforceId &&
+          obj.remaining <= this._reinforcePool.length + 1) {
+        const s = this._reinforceSpec, a = this._anchor(s.anchor);
+        const group = { types: this._reinforcePool, x: a.x, z: a.z, minR: s.minR, maxR: s.maxR, credit: obj.id };
+        this._reinforcePool = [];
+        if (s.via === 'dropship') this._deliverGroup(group);
+        else this._spawnGroup(group);
       }
       if (obj.remaining === 0) this._completeObjective(obj);
     }
+    if (e.isBoss) { this.boss = null; this.game.hud.hideBoss(); }
     if (this.mode === 'skirmish') this._maybeNextWave();
     this._refreshHud();
   }
@@ -198,11 +344,25 @@ export class StageManager {
     if (o.done) return;
     o.done = true;
     if (o.marker) o.marker = null;
-    // unlock any activate objective whose requirements are now met
+    if (o.ring) { this.game.scene.remove(o.ring); o.ring = null; }
+    // unlock anything whose requirements are now met
     for (const a of this.objectives) {
-      if (a.type === 'activate' && a.locked && a.requires.every(id => this.objectives.find(x => x.id === id)?.done)) {
+      if (!a.locked || !a.requires) continue;
+      if (!a.requires.every(id => this.objectives.find(x => x.id === id)?.done)) continue;
+      if (a.type === 'activate') {
         a.locked = false;
         this.game.cortana.say(['The console’s unlocked, Chief. Get to it.']);
+      } else if (a.type === 'defend') {
+        this._activateDefend(a);
+      } else {
+        a.locked = false;
+      }
+    }
+    // deferred eliminate spawns cued off this objective
+    for (const a of this.objectives) {
+      if (a.type === 'eliminate' && !a.done && a.spawn?.after === o.id && !a._spawned) {
+        a._spawned = true;
+        this._spawnEnemies(a);
       }
     }
     this.game.hud.banner(`OBJECTIVE COMPLETE`);
@@ -216,6 +376,8 @@ export class StageManager {
     this.game.cortana.say(outro);
     const next = this.stageIndex + 1;
     setTimeout(() => {
+      // free the cursor so the next briefing's DEPLOY button is clickable
+      this.game.input.exitLock();
       if (next < STAGES.length) this.loadStage(next);
       else this.game.hud.showVictory(this.game.player.score);
     }, 3600);
@@ -224,6 +386,7 @@ export class StageManager {
   /* ============================ SKIRMISH ============================ */
   startSkirmish() {
     this.mode = 'skirmish';
+    this.stage = null;
     this._teardown();
     const g = this.game;
     g.world.setTimeOfDay(0.34);
@@ -233,6 +396,7 @@ export class StageManager {
     g.player.spawn(sp.x, sp.z, 0.63);
     this.objectives = [{ id: 'wave', type: 'wave', label: 'Wave 1', done: false }];
     this.skirmishWave = 0;
+    this._initEvents();
     this.active = true;
     g.hud.hideBriefing();
     g.hud.showHud();
@@ -244,9 +408,20 @@ export class StageManager {
   _nextWave() {
     this.skirmishWave++;
     const n = 3 + this.skirmishWave;
+    const roll = () => {
+      const r = Math.random();
+      if (r < 0.12 + this.skirmishWave * 0.01) return 'drone';
+      return r < 0.35 + this.skirmishWave * 0.03 ? 'elite' : 'grunt';
+    };
+    // half arrive by dropship for the show, half are already in the field
+    const shipped = [];
     for (let i = 0; i < n; i++) {
-      const t = Math.random() < 0.25 + this.skirmishWave * 0.03 ? 'elite' : 'grunt';
-      this.game.enemies.spawnNear(t, 0, 0, 40, 150);
+      if (i < Math.min(3, n / 2)) shipped.push(roll());
+      else this.game.enemies.spawnNear(roll(), 0, 0, 60, 150);
+    }
+    if (shipped.length) {
+      const a = Math.random() * Math.PI * 2, r = 60 + Math.random() * 60;
+      this.game.dropships.deliver(shipped, Math.cos(a) * r, Math.sin(a) * r, null);
     }
     this.objectives[0].label = `Wave ${this.skirmishWave}`;
     this.game.hud.banner(`WAVE ${this.skirmishWave}`);
@@ -254,17 +429,23 @@ export class StageManager {
   }
 
   _maybeNextWave() {
-    if (this.game.enemies.aliveCount === 0) setTimeout(() => this.active && this._nextWave(), 2000);
+    if (this.game.enemies.aliveCount === 0 && !this.game.dropships.busy)
+      setTimeout(() => this.active && this._nextWave(), 2000);
   }
 
   /* ============================ SHARED ============================ */
   _teardown() {
     this.game.enemies.clear();
     this.game.projectiles.clear();
+    this.game.dropships.clear();
     for (const c of this.collectibles) this.game.scene.remove(c.mesh);
     this.collectibles.length = 0;
+    for (const o of this.objectives) if (o.ring) this.game.scene.remove(o.ring);
     if (this.console) { this.game.scene.remove(this.console.group); this.console = null; }
+    this.boss = null;
+    this.game.hud.hideBoss();
     this._reinforcePool = null;
+    this._events = [];
   }
 
   _refreshHud() {
@@ -276,7 +457,8 @@ export class StageManager {
     const out = [];
     for (const o of this.objectives) {
       if (o.done) continue;
-      if ((o.type === 'reach') && o.marker) out.push(o.marker);
+      if (o.type === 'reach' && o.marker) out.push(o.marker);
+      if (o.type === 'defend' && !o.locked && o.marker) out.push(o.marker);
       if (o.type === 'activate' && !o.locked && o.marker) out.push(o.marker);
     }
     for (const c of this.collectibles) if (!c.taken) out.push({ pos: c.pos, label: 'CORE', color: 0xffc040 });
@@ -286,6 +468,29 @@ export class StageManager {
   update(dt, time) {
     if (!this.active) return;
     const player = this.game.player;
+    this._elapsed += dt;
+    this._checkEvents();
+
+    // defend zones tick + countdown HUD (throttled to 4 Hz)
+    let defendLive = false;
+    for (const o of this.objectives) {
+      if (o.type === 'defend' && !o.done && !o.locked) { this._updateDefend(o, dt, time); defendLive = true; }
+    }
+    if (defendLive && time - this._hudTick > 250) { this._hudTick = time; this._refreshHud(); }
+
+    // boss health bar + enrage phase at half health
+    if (this.boss?.alive) {
+      const frac = this.boss.health / this.boss.maxHealth;
+      this.game.hud.updateBoss(frac);
+      if (!this.boss._enraged && frac < 0.55) {
+        this.boss._enraged = true;
+        this.boss.speed *= 1.35;
+        this.boss.cooldown *= 0.62;
+        this.game.hud.banner('THE MARSHAL IS ENRAGED');
+        this.game.cortana.say(['He’s tearing his armor off — watch it, Chief, he’s faster now!']);
+        this._deliverGroup({ types: ['grunt', 'grunt'], x: this.boss.position.x, z: this.boss.position.z, minR: 10, maxR: 18 });
+      }
+    }
 
     // spin/bob collectibles + pickup
     for (const c of this.collectibles) {

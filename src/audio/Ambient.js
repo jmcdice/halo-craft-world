@@ -71,6 +71,23 @@ export class Ambient {
     this.birdTimer = setTimeout(() => this._chirp(), 4000 + Math.random() * 9000);
   }
 
+  /* low sweeping rumble for a dropship pass */
+  rumble() {
+    if (!this.ctx) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+    const o = ctx.createOscillator(), o2 = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'sawtooth'; o2.type = 'sine';
+    o.frequency.setValueAtTime(38, t); o.frequency.linearRampToValueAtTime(64, t + 2.2);
+    o.frequency.linearRampToValueAtTime(30, t + 5.5);
+    o2.frequency.setValueAtTime(77, t); o2.frequency.linearRampToValueAtTime(52, t + 5.5);
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 140;
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.22, t + 1.4);
+    g.gain.linearRampToValueAtTime(0.0001, t + 5.8);
+    o.connect(lp); o2.connect(lp); lp.connect(g).connect(this.master);
+    o.start(t); o2.start(t); o.stop(t + 6); o2.stop(t + 6);
+  }
+
   /* ---- weapon / combat SFX ---- */
   shoot() {
     if (!this.ctx) return;

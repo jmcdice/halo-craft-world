@@ -9,6 +9,7 @@ import { World } from './world/World.js';
 import { Player } from './entities/Player.js';
 import { ProjectileManager } from './entities/Projectiles.js';
 import { EnemyManager } from './entities/Enemies.js';
+import { DropshipManager } from './entities/Dropship.js';
 import { HUD } from './ui/HUD.js';
 import { Cortana } from './ui/Cortana.js';
 import { Ambient } from './audio/Ambient.js';
@@ -45,9 +46,11 @@ export class Game {
     this.player = new Player(this.world, this.camera, this.input);
     this.projectiles = new ProjectileManager(this.scene, this.world);
     this.enemies = new EnemyManager(this.scene, this.world, this.projectiles, this.camera);
+    this.dropships = new DropshipManager(this.scene, this.world, this.enemies);
     this.hud = new HUD(this.camera);
     this.cortana = new Cortana(document.getElementById('cortana'), document.getElementById('cortana-text'));
     this.ambient = new Ambient();
+    this.dropships.onDeliver = () => this.ambient.rumble();
     this.stages = new StageManager(this);
 
     this._buildViewModel();
@@ -157,6 +160,7 @@ export class Game {
     if (this.running && this.stages.active && this.input.locked) {
       this.player.update(dt);
       if (this.input.mouseDown) this.fire(time);
+      this.dropships.update(dt, time);
       this.enemies.update(dt, this.player, time);
       this.projectiles.update(dt, this.enemies, this.player);
       this.stages.update(dt, time);

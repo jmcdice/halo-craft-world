@@ -1,8 +1,24 @@
 /* ============================================================
    stages.js — declarative campaign definition.
+
    Positions use named anchors resolved by StageManager against
-   the live world (dock, beacon, console...). Time-of-day drives
-   the campaign's mood: dawn landing -> dusk climb -> night finale.
+   the live world (dock, beacon, console, midway_* waypoints).
+   Time-of-day drives the mood: dawn landing -> dusk climb ->
+   night finale.
+
+   Each stage may declare `events`: scripted set-pieces fired by
+   triggers —
+     zone: 'anchor', radius     player enters an area
+     delay: seconds             time since deploy
+     objectiveDone: 'id'        an objective completes
+     progress: { id, count }    an objective reaches a count
+   — whose `do` actions are say / banner / spawn / dropship.
+
+   Eliminate specs support:
+     after: 'id'      defer the spawn until that objective is done
+     via: 'dropship'  arrive by Phantom instead of appearing
+     reinforce: true  second half of `types` held back, delivered
+                      when the first half is nearly down
    ============================================================ */
 
 export const STAGES = [
@@ -15,13 +31,25 @@ export const STAGES = [
       'Spartan, you’re awake. Good.',
       'We came down hard on the ring. This lake basin is our landing zone.',
       'Get your bearings — move to the dock marked on your HUD.',
-      'Then clear those three Covenant drones. Consider it a warm-up.',
+      'And stay sharp. We were not a quiet crash.',
     ],
     outro: ['Beachhead secured. Nicely done, Chief.'],
     objectives: [
       { id: 'reach_dock', type: 'reach', label: 'Reach the dock', anchor: 'dock', radius: 8 },
-      { id: 'kill_drones', type: 'eliminate', label: 'Destroy 3 drones', count: 3,
-        spawn: { types: ['grunt', 'grunt', 'grunt'], anchor: 'dock', minR: 12, maxR: 34 } },
+      { id: 'kill_drones', type: 'eliminate', label: 'Destroy 3 sentinel drones', count: 3,
+        spawn: { types: ['drone', 'drone', 'drone'], anchor: 'dock', minR: 12, maxR: 26, after: 'reach_dock' } },
+    ],
+    events: [
+      { delay: 6, do: [{ say: ['Motion tracker is live. Anything without a green blip — shoot it.'] }] },
+      { zone: 'midway_dock', radius: 28, do: [
+        { banner: 'PHANTOM INBOUND' },
+        { say: ['Contact! Covenant dropship on approach — they found us fast.', 'Two grunts. Consider it a warm-up.'] },
+        { dropship: { types: ['grunt', 'grunt'], anchor: 'midway_dock', minR: 10, maxR: 20 } },
+      ] },
+      { objectiveDone: 'reach_dock', do: [
+        { banner: 'DRONES INBOUND' },
+        { say: ['Sentinel drones closing on the dock. Watch the sky, Chief!'] },
+      ] },
     ],
   },
   {
@@ -36,8 +64,19 @@ export const STAGES = [
     ],
     outro: ['Shoreline’s clear. The path to the highlands is open.'],
     objectives: [
-      { id: 'clear_shore', type: 'eliminate', label: 'Clear the shore (6)', count: 6,
-        spawn: { types: ['grunt', 'grunt', 'grunt', 'grunt', 'elite', 'grunt'], anchor: 'shore', minR: 20, maxR: 70 } },
+      { id: 'clear_shore', type: 'eliminate', label: 'Clear the shore', count: 6,
+        spawn: { types: ['grunt', 'grunt', 'grunt', 'grunt', 'elite', 'grunt'], anchor: 'shore', minR: 20, maxR: 60, reinforce: true, via: 'dropship' } },
+    ],
+    events: [
+      { delay: 5, do: [{ say: ['I’m reading a patrol ahead. Keep to the rocks until you have an angle.'] }] },
+      { zone: 'midway_shore', radius: 26, do: [
+        { banner: 'FLANKING FORCE' },
+        { say: ['They’re trying to cut behind us — Phantom on your six!'] },
+        { dropship: { types: ['grunt', 'drone'], anchor: 'midway_shore', minR: 12, maxR: 22 } },
+      ] },
+      { progress: { id: 'clear_shore', count: 3 }, do: [
+        { say: ['Half of them down. The rest are calling for backup — make it not matter.'] },
+      ] },
     ],
   },
   {
@@ -47,14 +86,27 @@ export const STAGES = [
     start: 'start',
     intro: [
       'The Forerunner beacon is up in the highlands. Reach it.',
-      'They’ll throw everything they have to stop us — two waves at least.',
+      'Once I start the uplink, they’ll throw everything at us to stop it.',
       'The sun’s going down. Use the light while you have it.',
     ],
-    outro: ['Beacon’s online. The Cartographer is close now.'],
+    outro: ['Uplink complete. Beacon’s online — the Cartographer is close now.'],
     objectives: [
-      { id: 'survive', type: 'eliminate', label: 'Break the assault (8)', count: 8,
-        spawn: { types: ['grunt', 'elite', 'grunt', 'grunt', 'elite', 'grunt', 'grunt', 'elite'], anchor: 'beacon', minR: 15, maxR: 55, reinforce: true } },
-      { id: 'reach_beacon', type: 'reach', label: 'Reach the beacon', anchor: 'beacon', radius: 10 },
+      { id: 'reach_beacon', type: 'reach', label: 'Reach the beacon', anchor: 'beacon', radius: 12 },
+      { id: 'hold_beacon', type: 'defend', label: 'Hold the beacon', anchor: 'beacon', radius: 15,
+        duration: 45, requires: ['reach_beacon'],
+        waves: { every: 13, types: [['grunt', 'grunt'], ['grunt', 'elite'], ['drone', 'drone'], ['elite', 'grunt']] } },
+    ],
+    events: [
+      { delay: 5, do: [{ say: ['It’s a climb. Follow the waypoint and don’t stop for the view.'] }] },
+      { zone: 'midway_beacon', radius: 26, do: [
+        { banner: 'AMBUSH' },
+        { say: ['Ambush! They were waiting on the ridge — Phantom overhead!'] },
+        { dropship: { types: ['grunt', 'elite'], anchor: 'midway_beacon', minR: 10, maxR: 20 } },
+      ] },
+      { objectiveDone: 'reach_beacon', do: [
+        { banner: 'HOLD POSITION' },
+        { say: ['Uplink started — stay inside the perimeter while I work.', 'They’re coming, Chief. Hold the ring of light.'] },
+      ] },
     ],
   },
   {
@@ -65,18 +117,29 @@ export const STAGES = [
     intro: [
       'This is it, Chief — the map room, under the ring itself.',
       'Recover three energy cores. They’ll be glowing; you can’t miss them.',
-      'Then get them to the console and activate the Cartographer.',
-      'And Chief… there’s a Field Marshal down here. Be ready.',
+      'Each one is guarded. Take them anyway.',
+      'And Chief… their Field Marshal is down here somewhere. Be ready.',
     ],
     outro: [
       'Cartographer online. I have the coordinates.',
       'We did it, Spartan. The ring is ours. … for now.',
     ],
     objectives: [
-      { id: 'cores', type: 'collect', label: 'Recover energy cores', count: 3, anchor: 'console', spread: 60 },
+      { id: 'cores', type: 'collect', label: 'Recover energy cores', count: 3, anchor: 'console', spread: 60,
+        guards: ['grunt', 'drone'] },
       { id: 'boss', type: 'eliminate', label: 'Defeat the Field Marshal', count: 1,
-        spawn: { types: ['elite'], anchor: 'console', minR: 14, maxR: 24, boss: true } },
+        spawn: { types: ['elite'], anchor: 'console', minR: 14, maxR: 24, boss: true, after: 'cores', via: 'dropship' } },
       { id: 'activate', type: 'activate', label: 'Activate the Cartographer', anchor: 'console', radius: 7, requires: ['cores', 'boss'] },
+    ],
+    events: [
+      { delay: 6, do: [{ say: ['Cores are marked. Guards on every one — hit them fast, before they group up.'] }] },
+      { objectiveDone: 'cores', do: [
+        { banner: 'FIELD MARSHAL INBOUND' },
+        { say: ['All cores secured — wait. Heavy signature dropping in.', 'That’s him. That’s the Marshal. Give him everything, Chief!'] },
+      ] },
+      { objectiveDone: 'boss', do: [
+        { say: ['Marshal down. I… actually wasn’t sure we’d win that one.'] },
+      ] },
     ],
   },
 ];

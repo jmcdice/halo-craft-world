@@ -18,6 +18,9 @@ export class HUD {
       clip: document.getElementById('ammo-clip'),
       reserve: document.getElementById('ammo-reserve'),
       objectives: document.getElementById('objective-list'),
+      boss: document.getElementById('hud-boss'),
+      bossName: document.getElementById('boss-name'),
+      bossBar: document.querySelector('#boss-bar i'),
       score: document.getElementById('score-value'),
       flash: document.getElementById('flash'),
       banner: document.getElementById('banner'),
@@ -70,6 +73,14 @@ export class HUD {
       return `<li class="${cls}"><span class="mk">${mark}</span>${o.label}${prog}</li>`;
     }).join('');
   }
+
+  showBoss(name) {
+    this.el.bossName.textContent = name;
+    this.el.bossBar.style.width = '100%';
+    this.el.boss.classList.remove('hidden');
+  }
+  updateBoss(frac) { this.el.bossBar.style.width = `${Math.max(0, frac) * 100}%`; }
+  hideBoss() { this.el.boss.classList.add('hidden'); }
 
   banner(text) {
     this.el.banner.textContent = text;
