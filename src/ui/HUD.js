@@ -52,12 +52,13 @@ export class HUD {
   }
   hideBriefing() { this.el.briefing.classList.add('hidden'); }
 
+  _fmtReserve(r) { return Number.isFinite(r) ? r : '∞'; }
   setWeapon(name, clip, reserve) {
     this.el.weaponName.textContent = name;
     this.el.clip.textContent = clip;
-    this.el.reserve.textContent = reserve;
+    this.el.reserve.textContent = this._fmtReserve(reserve);
   }
-  setAmmo(clip, reserve) { this.el.clip.textContent = clip; this.el.reserve.textContent = reserve; }
+  setAmmo(clip, reserve) { this.el.clip.textContent = clip; this.el.reserve.textContent = this._fmtReserve(reserve); }
 
   setObjectives(objectives, mode, score) {
     this.el.score.textContent = score;

@@ -14,7 +14,7 @@ import { Cortana } from './ui/Cortana.js';
 import { Ambient } from './audio/Ambient.js';
 import { StageManager } from './campaign/StageManager.js';
 
-const WEAPON = { name: 'MA5B', clip: 32, reserve: 96, clipSize: 32, damage: 13, fireRate: 95, reloadTime: 1500 };
+const WEAPON = { name: 'MA5B', clip: 32, reserve: Infinity, clipSize: 32, damage: 13, fireRate: 95, reloadTime: 1500 };
 
 export class Game {
   constructor() {
