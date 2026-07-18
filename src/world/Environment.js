@@ -53,15 +53,17 @@ function makeSoftSprite() {
 }
 
 export class Environment {
-  constructor(scene, mobile) {
+  constructor(scene, mobile, obstacles) {
     this.scene = scene;
+    this.obstacles = obstacles;
     this.windUniform = { value: 0 };
     this.birds = [];
     this.particleUniforms = [];
     this.softTex = makeSoftSprite();
 
-    this._scatterTrees(makePineGeo(), mobile ? 1400 : 2300, 3.1, 0.7, 1.5);
-    this._scatterTrees(makeBroadGeo(), mobile ? 380 : 650, 8.7, 0.5, 1.0);
+    // trunk = hard collision body, clear = canopy footprint spawns must avoid
+    this._scatterTrees(makePineGeo(), mobile ? 1400 : 2300, 3.1, 0.7, 1.5, { trunk: s => 0.30 * s + 0.12, clear: s => 1.6 * s + 0.4 });
+    this._scatterTrees(makeBroadGeo(), mobile ? 380 : 650, 8.7, 0.5, 1.0, { trunk: s => 0.22 * s + 0.10, clear: s => 1.1 * s + 0.3 });
     this._scatterRocks(mobile ? 110 : 170);
     this._buildDock();
     this._buildMist();
@@ -90,7 +92,7 @@ export class Environment {
     return m;
   }
 
-  _scatterTrees(geo, count, seedOff, sMin, sMax) {
+  _scatterTrees(geo, count, seedOff, sMin, sMax, radii) {
     const inst = new THREE.InstancedMesh(geo, this._treeMaterial(), count);
     inst.castShadow = true; inst.receiveShadow = true;
     const dummy = new THREE.Object3D(), col = new THREE.Color();
@@ -112,6 +114,7 @@ export class Environment {
       inst.setMatrixAt(placed, dummy.matrix);
       col.setHSL(0.25 + Math.random() * 0.07, 0.26 + Math.random() * 0.16, 0.80 + Math.random() * 0.20);
       inst.setColorAt(placed, col);
+      this.obstacles?.add(x, z, radii.trunk(s), radii.clear(s));
       placed++;
     }
     inst.count = placed;
@@ -150,6 +153,8 @@ export class Environment {
       inst.setMatrixAt(placed, dummy.matrix);
       col.setHSL(0.08 + Math.random() * 0.04, 0.05 + Math.random() * 0.08, 0.62 + Math.random() * 0.3);
       inst.setColorAt(placed, col);
+      // only boulders big enough to matter get a hard body; pebbles are walkable
+      if (h > -0.5) this.obstacles?.add(x, z, s > 0.75 ? s * 0.85 : 0, Math.max(s * 1.1, 0.5));
       placed++;
     }
     inst.count = placed;

@@ -4,6 +4,7 @@ import { buildTerrain, buildHeightMap } from './Terrain.js';
 import { Water } from './Water.js';
 import { buildSky, buildHaloRing } from './Sky.js';
 import { Environment } from './Environment.js';
+import { ObstacleField } from './Obstacles.js';
 
 /* ============================================================
    World — assembles terrain, water, sky+ring, environment and
@@ -34,8 +35,10 @@ export class World {
     waterNrm.wrapS = waterNrm.wrapT = THREE.RepeatWrapping;
     this.water = new Water(renderer, scene, camera, this.heightMap, waterNrm, mobile);
 
-    // environment
-    this.env = new Environment(scene, mobile);
+    // environment (registers its trees/rocks into the obstacle field)
+    this.obstacles = new ObstacleField();
+    this.env = new Environment(scene, mobile, this.obstacles);
+    this._colOut = { x: 0, z: 0 };
 
     // lighting
     this._buildLights();
@@ -127,6 +130,15 @@ export class World {
   normalAt(x, z) { return terrainNormal(x, z, this._n); }
   shoreRadiusAt(a) { return shoreRadiusAt(a); }
   get waterLevel() { return WATER_LEVEL; }
+
+  /* ---- obstacle queries (trees / rocks) ---- */
+  isClear(x, z, radius) { return this.obstacles.isClear(x, z, radius); }
+  /* nearest obstacle-free spot that is also on dry land */
+  findClear(x, z, radius, maxDist) {
+    return this.obstacles.findClear(x, z, radius, maxDist, (px, pz) => terrainH(px, pz) > 0.4);
+  }
+  /* push a mover of `radius` out of hard bodies; returns shared {x,z} scratch */
+  collide(x, z, radius) { return this.obstacles.collideCircle(x, z, radius, this._colOut); }
 
   update(t, dt) {
     this.water.uniforms.uTime.value = t;
