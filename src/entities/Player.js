@@ -94,7 +94,7 @@ export class Player {
     const speed = sprinting ? SPRINT : WALK;
 
     this.forwardDir(this._fwd);
-    this._right.set(this._fwd.z, 0, -this._fwd.x); // right = fwd rotated -90 on Y
+    this._right.set(-this._fwd.z, 0, this._fwd.x); // camera-right: fwd rotated -90° about Y
 
     const wish = new THREE.Vector3()
       .addScaledVector(this._fwd, mf)
