@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { Radar } from './Radar.js';
 
 /* ============================================================
    HUD — DOM-driven heads-up display: shields/health, weapon,
@@ -28,10 +29,13 @@ export class HUD {
       menu: document.getElementById('menu'),
     };
     this.waypointEls = [];
+    this.radar = new Radar(document.getElementById('radar'));
     this._v = new THREE.Vector3();
     this._lastHealth = 100;
     this._bannerTimer = null;
   }
+
+  updateRadar(player, enemies, markers, dt) { this.radar.update(player, enemies, markers, dt); }
 
   showHud() { this.el.hud.classList.remove('hidden'); }
   hideHud() { this.el.hud.classList.add('hidden'); }

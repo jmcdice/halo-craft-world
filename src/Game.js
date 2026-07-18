@@ -155,6 +155,7 @@ export class Game {
       this.stages.update(dt, time);
       this.hud.updatePlayer(this.player);
       this.hud.updateWaypoints(this.stages.markers(), this.player.position);
+      this.hud.updateRadar(this.player, this.enemies, this.stages.markers(), dt);
     } else if (this.running) {
       // keep entities idle-updating for reflection consistency but don't advance combat hard
       this.projectiles.update(dt, this.enemies, this.player);

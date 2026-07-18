@@ -48,6 +48,16 @@ if (args.deploy) {
   await page.click('#btn-deploy').catch(() => {});
   await page.waitForTimeout(400);
 }
+if (args.spawn) {
+  await page.evaluate(() => {
+    const g = window.__game;
+    const p = g.player.position;
+    g.enemies.spawn('grunt', p.x - 6, p.z - 18);
+    g.enemies.spawn('elite', p.x + 20, p.z - 30);
+    g.enemies.spawn('grunt', p.x - 40, p.z + 25);
+  });
+  await page.waitForTimeout(300);
+}
 await page.waitForTimeout(WAIT);
 
 // probe the renderer state from the page

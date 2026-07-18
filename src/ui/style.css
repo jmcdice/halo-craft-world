@@ -89,8 +89,13 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #05080c;
 #hud-score { position: fixed; top: 26px; right: 30px; font-size: 22px; font-weight: 700; color: var(--hud); letter-spacing: 0.08em; }
 #hud-score::before { content: 'SCORE '; font-size: 11px; letter-spacing: 0.3em; color: var(--hud-dim); }
 
-/* Cortana comms */
-#cortana { position: fixed; left: 30px; bottom: 30px; max-width: 460px;
+/* motion tracker */
+#hud-radar { position: fixed; left: 24px; bottom: 22px; width: 168px; text-align: center; }
+#hud-radar canvas { display: block; filter: drop-shadow(0 0 10px rgba(75, 200, 255, 0.25)); }
+.radar-label { display: block; margin-top: 4px; font-size: 9px; letter-spacing: 0.3em; color: var(--hud-dim); }
+
+/* Cortana comms — sits to the right of the tracker */
+#cortana { position: fixed; left: 212px; bottom: 30px; max-width: 420px;
   display: flex; gap: 14px; align-items: center; padding: 14px 18px;
   background: var(--glass); border: 1px solid var(--line); border-left: 3px solid var(--hud);
   border-radius: 8px; backdrop-filter: blur(10px); }
