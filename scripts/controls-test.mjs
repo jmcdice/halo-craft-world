@@ -80,6 +80,18 @@ const dist = await page.evaluate(() => {
   return Math.hypot(g.player.position.x - from.x, g.player.position.z - from.z);
 });
 checks.stickMovesPlayer = dist > 2;
+
+// ---- strafe direction: facing -Z, thumb-right must move +X (camera-right) ----
+checks.strafeNotMirrored = await page.evaluate(() => {
+  const g = window.__game;
+  g.player.position.set(60, 0, 90); g.player._snapToGround();
+  g.player.yaw = 0; g.player.pitch = 0;
+  const x0 = g.player.position.x;
+  const prev = g.input.axisS; g.input.axisS = 1;
+  for (let i = 0; i < 30; i++) g.player.update(1 / 60);
+  g.input.axisS = prev;
+  return g.player.position.x - x0 > 1;
+});
 await pev('scene', 'pointerup', 1, 120, 265);
 s = await input();
 checks.stickReleased = s.axisF === 0 && s.axisS === 0;
