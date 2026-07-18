@@ -1,4 +1,4 @@
-/* Deterministic campaign set-piece test: drives all four stages through
+/* Deterministic campaign set-piece test: drives all five stages through
    window.__game with manual stepping (the real-time loop is unreliable
    under software rendering). Covers: scripted zone/delay/objective events,
    dropship delivery lifecycle, deferred drone spawns, kill-credit tagging,
@@ -17,7 +17,8 @@ function findChrome() {
   } catch {}
 }
 const browser = await chromium.launch({ executablePath: process.env.PW_CHROMIUM || findChrome(), headless: true,
-  args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox'] });
+  args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox',
+    '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows'] });
 const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
 const errors = [];
 page.on('pageerror', e => errors.push(e.message));
@@ -158,13 +159,45 @@ await page.waitForTimeout(4200);
 await page.click('#btn-deploy');
 await page.waitForTimeout(300);
 await dump('AFTER-S3:');
-/* ---------- STAGE 4: Cartographer (boss) ---------- */
-checks.s4_title = await ev(() => window.__game.stages.stage.title === 'The Cartographer');
-checks.s4_coresGuarded = await ev(() => window.__game.enemies.aliveCount === 6);   // 3 cores × 2 guards
-checks.s4_bossDeferred = await ev(() => window.__game.stages.boss === null);
+/* ---------- STAGE 4: The Pass (mountains) ---------- */
+checks.s4_title = await ev(() => window.__game.stages.stage.title === 'The Pass');
+checks.s4_radiusOpened = await ev(() => window.__game.world.playRadius > 250);
+checks.s4_summitIsHigh = await ev(() => {
+  const g = window.__game, p = g.stages._anchor('pass');
+  return Math.hypot(p.x, p.z) > 200 && g.world.heightAt(p.x, p.z) > 20;
+});
+// climb to the ridge: zone ambush (2 drones) + reach objective + summit guard phantom
+await ev(() => { const g = window.__game, p = g.stages._anchor('ridge'); window.__tp(p.x, p.z); window.__step(3); });
+checks.s4_ridgeReached = await ev(() => window.__game.stages.objectives.find(o => o.id === 'reach_ridge')?.done === true);
+checks.s4_summitShips = await ev(() => window.__game.dropships.busy);
+checks.s4_summitGuardArrives = await ev(() => {
+  window.__flushShips();
+  const g = window.__game;
+  const tagged = g.enemies.list.filter(e => e.alive && e.objectiveId === 'pass_patrol');
+  return tagged.length === 5 && g.enemies.aliveCount === 7;   // 5 guard + 2 ambush drones
+});
+checks.s4_relayLocked = await ev(() => window.__game.stages.objectives.find(o => o.id === 'light_relay')?.locked === true);
+await ev(() => window.__killAll());
+checks.s4_patrolCleared = await ev(() => window.__game.stages.objectives.find(o => o.id === 'pass_patrol')?.done === true);
+checks.s4_relayUnlocked = await ev(() => window.__game.stages.objectives.find(o => o.id === 'light_relay')?.locked === false);
+await ev(() => {
+  const g = window.__game, o = g.stages.objectives.find(o => o.id === 'light_relay');
+  for (let tries = 0; tries < 4 && !o.done; tries++) { window.__tp(o.pos.x, o.pos.z); window.__step(5); }
+});
+checks.s4_complete = await ev(() => window.__game.stages.objectives.every(o => o.done));
+await page.waitForTimeout(4200);
+
+await page.click('#btn-deploy');
+await page.waitForTimeout(300);
+await dump('AFTER-S4:');
+/* ---------- STAGE 5: Cartographer (boss) ---------- */
+checks.s5_title = await ev(() => window.__game.stages.stage.title === 'The Cartographer');
+checks.s5_radiusRestored = await ev(() => window.__game.world.playRadius === 165);
+checks.s5_coresGuarded = await ev(() => window.__game.enemies.aliveCount === 6);   // 3 cores × 2 guards
+checks.s5_bossDeferred = await ev(() => window.__game.stages.boss === null);
 // clear guards, then collect all three cores
 await ev(() => { window.__killAll(); });
-checks.s4_guardsNoCredit = await ev(() => {
+checks.s5_guardsNoCredit = await ev(() => {
   const o = window.__game.stages.objectives.find(o => o.id === 'boss');
   return !!o && (o.progress || 0) === 0;
 });
@@ -172,17 +205,17 @@ await ev(() => {
   const g = window.__game;
   for (const c of g.stages.collectibles) { window.__tp(c.pos.x, c.pos.z); window.__step(2); }
 });
-checks.s4_coresDone = await ev(() => window.__game.stages.objectives.find(o => o.id === 'cores')?.done === true);
+checks.s5_coresDone = await ev(() => window.__game.stages.objectives.find(o => o.id === 'cores')?.done === true);
 // the Field Marshal arrives by phantom
-checks.s4_bossShip = await ev(() => window.__game.dropships.busy);
-checks.s4_bossArrived = await ev(() => {
+checks.s5_bossShip = await ev(() => window.__game.dropships.busy);
+checks.s5_bossArrived = await ev(() => {
   window.__flushShips();
   const b = window.__game.stages.boss;
   return !!b && b.isBoss === true && b.maxHealth === 320;
 });
-checks.s4_bossBarShown = await ev(() => !document.getElementById('hud-boss').classList.contains('hidden'));
+checks.s5_bossBarShown = await ev(() => !document.getElementById('hud-boss').classList.contains('hidden'));
 // damage to half -> enrage + summons
-checks.s4_enrage = await ev(() => {
+checks.s5_enrage = await ev(() => {
   const g = window.__game, b = g.stages.boss;
   g.enemies.damage(b, b.maxHealth * 0.5 + 5, g.player);
   window.__step(3);
@@ -193,20 +226,21 @@ await ev(() => {
   const g = window.__game;
   window.__flushShips(); window.__killAll();
 });
-checks.s4_bossDead = await ev(() => {
+checks.s5_bossDead = await ev(() => {
   const g = window.__game;
   return g.stages.objectives.find(o => o.id === 'boss').done === true &&
     document.getElementById('hud-boss').classList.contains('hidden');
 });
-checks.s4_activateUnlocked = await ev(() => window.__game.stages.objectives.find(o => o.id === 'activate')?.locked === false);
+checks.s5_activateUnlocked = await ev(() => window.__game.stages.objectives.find(o => o.id === 'activate')?.locked === false);
 await ev(() => {
   const g = window.__game, o = g.stages.objectives.find(o => o.id === 'activate');
   // a pending respawn timer can yank the player away between evals; retry until it sticks
   for (let tries = 0; tries < 4 && !o.done; tries++) { window.__tp(o.pos.x, o.pos.z); window.__step(5); }
 });
 await dump('PRE-VICTORY:');
-await page.waitForTimeout(4200);   // outro plays before the victory screen
-checks.s4_victory = await ev(() => window.__game.hud._victory === true);
+// the outro timer can land late when slow render frames block the event loop — poll, don't race it
+checks.s5_victory = await page.waitForFunction(() => window.__game.hud._victory === true, null, { timeout: 20000 })
+  .then(() => true).catch(() => false);
 await dump('END:');
 
 console.log(JSON.stringify(checks, null, 1));
