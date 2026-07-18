@@ -127,6 +127,10 @@ export class Player {
       this.velocity.x *= 0.2; this.velocity.z *= 0.2;
     }
 
+    // solid trees/rocks: push back out of any trunk we stepped into
+    const col = this.world.collide(this.position.x, this.position.z, RADIUS);
+    this.position.x = col.x; this.position.z = col.z;
+
     // keep inside the playable bowl
     const maxR = 165;
     const r = Math.hypot(this.position.x, this.position.z);

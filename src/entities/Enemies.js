@@ -139,15 +139,19 @@ export class EnemyManager {
   }
 
   spawnNear(type, cx, cz, minR, maxR) {
-    for (let tries = 0; tries < 30; tries++) {
+    const clearance = TYPES[type].radius + 0.4;
+    for (let tries = 0; tries < 60; tries++) {
       const a = Math.random() * Math.PI * 2;
       const rr = minR + Math.random() * (maxR - minR);
       const x = cx + Math.cos(a) * rr, z = cz + Math.sin(a) * rr;
       if (Math.hypot(x, z) > 160) continue;
       if (this.world.heightAt(x, z) < 0.6) continue;
+      if (!this.world.isClear(x, z, clearance)) continue;   // don't spawn inside trees/rocks
       return this.spawn(type, x, z);
     }
-    return this.spawn(type, cx + minR, cz);
+    // dense forest or open water around the anchor: spiral out until land+clearance
+    const p = this.world.findClear(cx, cz, clearance, maxR + 80);
+    return this.spawn(type, p.x, p.z);
   }
 
   damage(e, amount, player) {
@@ -217,6 +221,11 @@ export class EnemyManager {
       let nx = e.position.x + moveVec.x * spd * dt;
       let nz = e.position.z + moveVec.z * spd * dt;
       if (this.world.heightAt(nx, nz) < 0.4) { e.patrolTarget = null; nx = e.position.x; nz = e.position.z; }
+      { // slide around tree trunks / boulders instead of clipping through
+        const c = this.world.collide(nx, nz, e.radius);
+        if ((c.x !== nx || c.z !== nz) && e.state === STATE.PATROL && Math.random() < dt * 2) e.patrolTarget = null;
+        nx = c.x; nz = c.z;
+      }
       const R = Math.hypot(nx, nz); if (R > 158) { nx *= 158 / R; nz *= 158 / R; }
       const speedNow = Math.hypot(nx - e.position.x, nz - e.position.z) / (dt || 1e-3);
       e.position.x = nx; e.position.z = nz;

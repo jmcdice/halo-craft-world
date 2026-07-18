@@ -45,6 +45,14 @@ export class StageManager {
     }
   }
 
+  /* nudge a point out of trees/rocks (and keep it on land) */
+  _clearPoint(p, radius) {
+    const w = this.game.world;
+    if (w.isClear(p.x, p.z, radius) && w.heightAt(p.x, p.z) > 0.3) return p;
+    const c = w.findClear(p.x, p.z, radius);
+    return w.heightAt(c.x, c.z) > 0.3 ? c : p;
+  }
+
   _highPoint() {
     // find a reachable high spot within the play bowl
     let best = { x: 120, z: 0, h: -1e9 };
@@ -74,7 +82,7 @@ export class StageManager {
     g.world.setFogDensity(s.fog);
     g.world.setWaves(s.waves);
 
-    const start = this._anchor(s.start);
+    const start = this._clearPoint(this._anchor(s.start), 0.8);
     g.player.spawn(start.x, start.z, 0.63);
 
     // build objectives
@@ -132,6 +140,7 @@ export class StageManager {
       const r = spread * (0.5 + 0.5 * Math.random());
       let x = a.x + Math.cos(ang) * r, z = a.z + Math.sin(ang) * r;
       const rr = Math.hypot(x, z); if (rr > 155) { x *= 155 / rr; z *= 155 / rr; }
+      ({ x, z } = this._clearPoint({ x, z }, 1.0));
       const y = Math.max(this.game.world.heightAt(x, z), 0.2) + 1.2;
       const core = this._makeCore();
       core.position.set(x, y, z);
@@ -152,6 +161,8 @@ export class StageManager {
   }
 
   _spawnConsole(pos) {
+    const cp = this._clearPoint({ x: pos.x, z: pos.z }, 2.4);
+    pos.x = cp.x; pos.z = cp.z; pos.y = this.game.world.heightAt(cp.x, cp.z);
     const g = new THREE.Group();
     const base = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 2.0, 1.0, 8),
       new THREE.MeshStandardMaterial({ color: 0x3a4048, roughness: 0.5, metalness: 0.6 }));
@@ -218,7 +229,8 @@ export class StageManager {
     g.world.setTimeOfDay(0.34);
     g.world.setFogDensity(0.42);
     g.world.setWaves(0.42);
-    g.player.spawn(76, 104, 0.63);
+    const sp = this._clearPoint({ x: 76, z: 104 }, 0.8);
+    g.player.spawn(sp.x, sp.z, 0.63);
     this.objectives = [{ id: 'wave', type: 'wave', label: 'Wave 1', done: false }];
     this.skirmishWave = 0;
     this.active = true;
@@ -311,7 +323,7 @@ export class StageManager {
       this.game.hud.banner('YOU DIED — REGROUPING');
       this.game.cortana.say(['We’re not done yet, Chief. Back on your feet.']);
       setTimeout(() => {
-        const start = this._anchor(this.mode === 'campaign' ? this.stage.start : 'start');
+        const start = this._clearPoint(this._anchor(this.mode === 'campaign' ? this.stage.start : 'start'), 0.8);
         player.spawn(start.x, start.z, 0.63);
         this._respawning = false;
       }, 2600);
