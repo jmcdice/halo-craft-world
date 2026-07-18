@@ -18,11 +18,16 @@ const WEAPON = { name: 'MA5B', clip: 32, reserve: Infinity, clipSize: 32, damage
 
 export class Game {
   constructor() {
-    this.mobile = /Mobi|Android/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && innerWidth < 900);
+    const q = new URLSearchParams(location.search);
+    const ua = navigator.userAgent;
+    const coarse = matchMedia('(pointer: coarse)').matches;
+    this.mobile = q.get('mobile') === '1' ? true
+      : q.get('mobile') === '0' ? false
+      : (/Mobi|Android|iPhone|iPad|iPod/i.test(ua) || (navigator.maxTouchPoints > 0 && coarse));
     this.canvas = document.getElementById('scene');
 
     this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: false, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio, this.mobile ? 1.5 : 2));
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, this.mobile ? 1.0 : 2));
     this.renderer.setSize(innerWidth, innerHeight);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -34,11 +39,12 @@ export class Game {
     this.camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 4200);
     this.camera.position.set(76, 22, 104);
 
-    this.input = new Input(this.canvas);
+    this.input = new Input(this.canvas, this.mobile);
+    this.input.onReload = () => this.reload();
     this.world = new World(this.renderer, this.scene, this.camera, this.mobile);
     this.player = new Player(this.world, this.camera, this.input);
     this.projectiles = new ProjectileManager(this.scene, this.world);
-    this.enemies = new EnemyManager(this.scene, this.world, this.projectiles);
+    this.enemies = new EnemyManager(this.scene, this.world, this.projectiles, this.camera);
     this.hud = new HUD(this.camera);
     this.cortana = new Cortana(document.getElementById('cortana'), document.getElementById('cortana-text'));
     this.ambient = new Ambient();
@@ -138,8 +144,9 @@ export class Game {
   }
 
   /* ---- lifecycle ---- */
-  startCampaign() { this.running = true; this.resetWeapon(); this.ambient.enable(); this.hud.hideMenu(); this.stages.startCampaign(0); }
-  startSkirmish() { this.running = true; this.resetWeapon(); this.ambient.enable(); this.hud.hideMenu(); this.stages.startSkirmish(); }
+  _showTouch() { if (this.mobile) document.getElementById('touch-controls').classList.remove('hidden'); }
+  startCampaign() { this.running = true; this.resetWeapon(); this.ambient.enable(); this.hud.hideMenu(); this._showTouch(); this.stages.startCampaign(0); }
+  startSkirmish() { this.running = true; this.resetWeapon(); this.ambient.enable(); this.hud.hideMenu(); this._showTouch(); this.stages.startSkirmish(); }
 
   _loop() {
     requestAnimationFrame(this._loop);

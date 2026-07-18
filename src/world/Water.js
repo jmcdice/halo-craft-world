@@ -13,7 +13,7 @@ export class Water {
     this.scene = scene;
     this.camera = camera;
 
-    const REFL_RES = shot ? 1024 : (mobile ? 1024 : 2048);
+    const REFL_RES = shot ? 1024 : (mobile ? 512 : 2048);
     this.reflRT = new THREE.WebGLRenderTarget(REFL_RES, REFL_RES, {
       type: THREE.HalfFloatType, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter,
     });

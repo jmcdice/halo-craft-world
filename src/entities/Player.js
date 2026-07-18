@@ -86,7 +86,11 @@ export class Player {
     if (input.down('KeyS')) mf -= 1;
     if (input.down('KeyD')) ms += 1;
     if (input.down('KeyA')) ms -= 1;
-    const sprinting = input.down('ShiftLeft') && mf > 0;
+    // analog stick (mobile) adds on top; clamp to unit box
+    mf = clamp(mf + input.axisF, -1, 1);
+    ms = clamp(ms + input.axisS, -1, 1);
+    const jumpHeld = input.down('Space') || input.jump;
+    const sprinting = ((input.down('ShiftLeft') || input.sprint) && mf > 0.1);
     const speed = sprinting ? SPRINT : WALK;
 
     this.forwardDir(this._fwd);
@@ -100,7 +104,7 @@ export class Player {
     if (this.onGround) {
       this.velocity.x = wish.x;
       this.velocity.z = wish.z;
-      if (input.down('Space')) { this.velocity.y = JUMP; this.onGround = false; }
+      if (jumpHeld) { this.velocity.y = JUMP; this.onGround = false; }
     } else {
       this.velocity.x += wish.x * AIR_CONTROL * dt;
       this.velocity.z += wish.z * AIR_CONTROL * dt;
