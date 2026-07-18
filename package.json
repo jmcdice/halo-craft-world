@@ -1,0 +1,19 @@
+{
+  "name": "halo-craft-world",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Halo Craft: Installation 04 — a photoreal Halo campaign built on a procedural lakeside world",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "preview": "vite preview --host --port 4173"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.61.1",
+    "vite": "^5.4.0"
+  },
+  "dependencies": {
+    "three": "^0.161.0"
+  }
+}

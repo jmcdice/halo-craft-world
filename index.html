@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>HALO CRAFT — Installation 04</title>
+  <link rel="stylesheet" href="./src/ui/style.css" />
+</head>
+<body>
+  <canvas id="scene"></canvas>
+
+  <!-- Loading -->
+  <div id="loading">
+    <div class="ring"></div>
+    <p>WAKING THE INSTALLATION</p>
+  </div>
+
+  <!-- Main menu -->
+  <div id="menu" class="overlay hidden">
+    <div class="menu-inner">
+      <h1 class="game-title">HALO<span>CRAFT</span></h1>
+      <p class="game-sub">INSTALLATION 04</p>
+      <div class="menu-buttons">
+        <button class="btn btn-primary" id="btn-campaign">CAMPAIGN</button>
+        <button class="btn" id="btn-skirmish">SKIRMISH</button>
+      </div>
+      <p class="menu-hint">WASD move · MOUSE look · CLICK fire · SPACE jump · SHIFT sprint · R reload</p>
+    </div>
+  </div>
+
+  <!-- Stage briefing / intermission -->
+  <div id="briefing" class="overlay hidden">
+    <div class="briefing-inner">
+      <p class="briefing-stage" id="briefing-stage">STAGE 1</p>
+      <h2 class="briefing-title" id="briefing-title"></h2>
+      <p class="briefing-desc" id="briefing-desc"></p>
+      <ul class="briefing-objectives" id="briefing-objectives"></ul>
+      <button class="btn btn-primary" id="btn-deploy">DEPLOY</button>
+    </div>
+  </div>
+
+  <!-- HUD -->
+  <div id="hud" class="hidden">
+    <div id="crosshair"><span></span><span></span><span></span><span></span></div>
+
+    <div id="hud-shield">
+      <div id="shield-bar"><i></i></div>
+      <div id="health-bar"><i></i></div>
+    </div>
+
+    <div id="hud-weapon">
+      <span id="weapon-name">MA5B</span>
+      <span id="ammo"><b id="ammo-clip">32</b> / <span id="ammo-reserve">96</span></span>
+    </div>
+
+    <div id="hud-objectives">
+      <h3>OBJECTIVES</h3>
+      <ul id="objective-list"></ul>
+    </div>
+
+    <div id="hud-score">
+      <span id="score-value">0</span>
+    </div>
+
+    <!-- Cortana comms -->
+    <div id="cortana" class="hidden">
+      <div id="cortana-avatar"></div>
+      <div id="cortana-text"></div>
+    </div>
+
+    <!-- Damage / status flash -->
+    <div id="flash"></div>
+    <div id="banner" class="hidden"></div>
+  </div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+# Halo Craft: Installation 04 — play stack.
+# Builds the self-contained image (Vite build baked in, served by nginx) and
+# maps it to host port 8091 (8090 is the old voxel build).
+services:
+  halo-craft-world:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: halo-craft-world:latest
+    container_name: halo-craft-world
+    ports:
+      - "${PORT:-8091}:80"
+    restart: unless-stopped
