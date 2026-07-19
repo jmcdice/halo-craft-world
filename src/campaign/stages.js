@@ -112,7 +112,7 @@ export const STAGES = [
   {
     title: 'The Pass',
     subtitle: 'INSTALLATION 04 — 19:40',
-    tod: 0.84, fog: 0.55, waves: 0.4,
+    tod: 0.88, fog: 0.55, waves: 0.4,   // deep dusk: first stars over the peaks
     start: 'beacon',
     playRadius: 275,          // opens the true mountains beyond the bowl
     intro: [
