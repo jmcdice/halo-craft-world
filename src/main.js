@@ -8,6 +8,16 @@ const loading = document.getElementById('loading');
 const menu = document.getElementById('menu');
 const deployBtn = document.getElementById('btn-deploy');
 
+// Build/version readout on the main menu (values injected by Vite at build time;
+// see vite.config.js). Lets you tell at a glance whether you're on the latest build.
+const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0';
+const BUILD_COMMIT = typeof __BUILD_COMMIT__ !== 'undefined' ? __BUILD_COMMIT__ : 'dev';
+const BUILD_DATE = typeof __BUILD_DATE__ !== 'undefined' ? __BUILD_DATE__ : '';
+const versionEl = document.getElementById('game-version');
+if (versionEl) {
+  versionEl.textContent = `BUILD v${APP_VERSION} · ${BUILD_COMMIT}${BUILD_DATE ? ` · ${BUILD_DATE}` : ''}`;
+}
+
 // give the world a moment to build, then reveal the menu
 setTimeout(() => {
   loading.classList.add('done');

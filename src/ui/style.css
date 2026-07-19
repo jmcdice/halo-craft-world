@@ -36,7 +36,9 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #05080c;
 .game-title { font-size: 84px; font-weight: 700; letter-spacing: 0.06em; line-height: 0.9;
   text-shadow: 0 0 40px rgba(75, 200, 255, 0.5); }
 .game-title span { color: var(--hud); }
-.game-sub { font-size: 15px; letter-spacing: 0.7em; color: var(--hud-dim); margin: 10px 0 44px; }
+.game-sub { font-size: 15px; letter-spacing: 0.7em; color: var(--hud-dim); margin: 10px 0 6px; }
+/* Build/version readout, right under INSTALLATION 04 — same dim HUD colour, a bit smaller. */
+.game-version { font-size: 12px; letter-spacing: 0.3em; color: var(--hud-dim); opacity: 0.8; margin: 0 0 44px; }
 .menu-buttons { display: flex; flex-direction: column; gap: 14px; align-items: center; }
 .menu-hint { margin-top: 40px; font-size: 12px; letter-spacing: 0.18em; color: rgba(234, 246, 255, 0.4); }
 
@@ -155,7 +157,8 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #05080c;
 /* ---------- responsive / mobile HUD ---------- */
 @media (max-width: 820px), (pointer: coarse) {
   .game-title { font-size: 52px; }
-  .game-sub { font-size: 11px; letter-spacing: 0.4em; margin-bottom: 30px; }
+  .game-sub { font-size: 11px; letter-spacing: 0.4em; margin-bottom: 5px; }
+  .game-version { font-size: 10px; margin-bottom: 30px; }
   .menu-hint { display: none; }
   .btn { min-width: 200px; padding: 18px 30px; }
   .briefing-inner { max-width: 90vw; padding: 26px 24px; }
