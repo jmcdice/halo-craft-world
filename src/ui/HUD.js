@@ -74,6 +74,19 @@ export class HUD {
     }).join('');
   }
 
+  /* small floating notice that works over the menu AND in-game */
+  toast(msg) {
+    if (!this._toastEl) {
+      this._toastEl = document.createElement('div');
+      this._toastEl.id = 'toast';
+      document.body.appendChild(this._toastEl);
+    }
+    this._toastEl.textContent = msg;
+    this._toastEl.classList.add('show');
+    clearTimeout(this._toastTimer);
+    this._toastTimer = setTimeout(() => this._toastEl.classList.remove('show'), 3200);
+  }
+
   showBoss(name) {
     this.el.bossName.textContent = name;
     this.el.bossBar.style.width = '100%';

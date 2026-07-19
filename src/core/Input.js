@@ -1,4 +1,5 @@
 import { TouchControls } from './TouchControls.js';
+import { GamepadControls } from './GamepadControls.js';
 
 /* ============================================================
    Input — unified input surface for desktop and mobile.
@@ -28,7 +29,10 @@ export class Input {
 
     if (mobile) this.touch = new TouchControls(canvas, this);
     else this._initDesktop();
+    this.gamepad = new GamepadControls(this);   // works alongside either
   }
+
+  pollGamepad(dt) { this.gamepad.poll(dt); }
 
   _initDesktop() {
     addEventListener('keydown', (e) => { this.keys.add(e.code); if (e.code === 'Space') e.preventDefault(); });
