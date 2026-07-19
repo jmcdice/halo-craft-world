@@ -1,4 +1,5 @@
 import { Game } from './Game.js';
+import { STAGES } from './campaign/stages.js';
 
 /* Boot: build the game, reveal the menu, wire the buttons. */
 const game = new Game();
@@ -26,6 +27,16 @@ setTimeout(() => {
 
 document.getElementById('btn-campaign').addEventListener('click', () => game.startCampaign());
 document.getElementById('btn-skirmish').addEventListener('click', () => game.startSkirmish());
+
+// mission select: jump straight into any stage's briefing
+const missionRow = document.getElementById('mission-select');
+STAGES.forEach((s, i) => {
+  const b = document.createElement('button');
+  b.className = 'btn btn-mission';
+  b.innerHTML = `<b>${i + 1}</b>${s.title.toUpperCase()}`;
+  b.addEventListener('click', () => game.startCampaign(i));
+  missionRow.appendChild(b);
+});
 
 deployBtn.addEventListener('click', () => {
   if (game.hud._victory) { location.reload(); return; }
