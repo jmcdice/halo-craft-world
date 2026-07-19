@@ -81,17 +81,21 @@ export class World {
     this.timeOfDay = tt;
     let elev;
     if (tt < 0.45) elev = lerp(11, 54, tt / 0.45);
-    else elev = lerp(54, -5, (tt - 0.45) / 0.55);
+    else elev = lerp(54, -18, (tt - 0.45) / 0.55);   // late tod dives well below the horizon: real night
+
     const azim = lerp(72, 288, tt);
     const el = THREE.MathUtils.degToRad(elev), az = THREE.MathUtils.degToRad(azim);
     this._sunDir.set(Math.cos(el) * Math.cos(az), Math.sin(el), Math.cos(el) * Math.sin(az)).normalize();
     const sunH = this._sunDir.y;
     const dusk = sstep(0.45, 0.06, sunH);
+    const night = sstep(0.02, -0.15, sunH);   // 0 day -> 1 deep night
     this.currentDusk = dusk;
 
     this.sunLight.position.copy(this._sunDir).multiplyScalar(420);
-    this.sunLight.intensity = 3.6 * clamp(sunH * 3.5 + 0.25, 0.38, 1.0);
+    // at night the "sun" becomes cool moon/starlight fill so combat stays readable
+    this.sunLight.intensity = 3.6 * clamp(sunH * 3.5 + 0.25, 0.38, 1.0) * lerp(1.0, 0.45, night);
     this._c1.set(0xfff3e0).lerp(this._c2.set(0xff7a28), dusk);
+    this._c1.lerp(this._c2.set(0x9ab0dd), night * 0.85);
     this.sunLight.color.copy(this._c1);
 
     this.hemi.intensity = lerp(0.75, 0.85, dusk);
@@ -103,6 +107,7 @@ export class World {
 
     this._c1.set(0x93b2cc).lerp(this._c2.set(0xd8865a), dusk);
     this._fogC.copy(this._c1).lerp(this._c2.set(0x8a7a9a), dusk * dusk * 0.35);
+    this._fogC.lerp(this._c2.set(0x0d1220), night * 0.85);   // night haze goes deep blue, not sunset pink
     this.scene.fog.color.copy(this._fogC);
 
     this.skyUniforms.uSunDir.value.copy(this._sunDir);
