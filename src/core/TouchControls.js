@@ -1,7 +1,7 @@
 /* ============================================================
    TouchControls — all mobile touch handling, feeding the shared
    Input surface (axisF/axisS, lookX/lookY, mouseDown, jump,
-   sprint, onReload).
+   sprint).
 
    Design:
    - Every pointer gets a role on pointerdown (stick | look) and
@@ -136,12 +136,7 @@ export class TouchControls {
     held('tc-jump',
       () => { this.input.jump = true; },
       () => { this.input.jump = false; });
-
-    const reload = document.getElementById('tc-reload');
-    reload.addEventListener('pointerdown', (e) => {
-      e.preventDefault(); e.stopPropagation();
-      this.input.onReload?.();
-    }, { passive: false });
+    // no reload button: an empty clip reloads automatically on fire
   }
 
   _bindCanvas(c) {
