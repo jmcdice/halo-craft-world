@@ -36,13 +36,50 @@ export class TouchControls {
     this.knob = document.getElementById('tc-knob');
 
     this._roles = new Map();            // pointerId -> 'stick' | 'look'
+    this._btnOwners = new Map();        // pointerId -> clear() for a held button
     this._stickOrigin = { x: 0, y: 0 };
     this._lookLast = { x: 0, y: 0 };
 
     this._bindButtons();
     this._bindCanvas(canvas);
+    this._bindGlobalRelease();
     for (const el of [canvas, document.getElementById('touch-controls')])
       el?.addEventListener('contextmenu', (e) => e.preventDefault());
+  }
+
+  /* ---- robustness against lost pointer releases ------------------------
+     iOS can deliver a finger's final pointerup elsewhere — or not at all
+     (system gestures, edge swipes, app switches, pointerId reuse). Without
+     a safety net a role never clears: the stick freezes at its last value
+     (drifting, often walking backward) and new left-side touches get
+     misread as look. So we sweep releases at the window in the capture
+     phase, and fully reset when focus/visibility is lost. */
+  _bindGlobalRelease() {
+    const sweep = (e) => this._end(e.pointerId);
+    for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture'])
+      window.addEventListener(ev, sweep, { capture: true });
+    const reset = () => this.resetAll();
+    window.addEventListener('blur', reset);
+    window.addEventListener('pagehide', reset);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) this.resetAll(); });
+  }
+
+  /* clear whatever a single pointer owned (canvas role and/or button) */
+  _end(pointerId) {
+    const role = this._roles.get(pointerId);
+    if (role) { this._roles.delete(pointerId); if (role === 'stick') this._stickReset(); }
+    const clearBtn = this._btnOwners.get(pointerId);
+    if (clearBtn) { this._btnOwners.delete(pointerId); clearBtn(); }
+  }
+
+  /* clear ALL touch state — used on blur / backgrounding */
+  resetAll() {
+    for (const role of this._roles.values()) if (role === 'stick') this._stickReset();
+    this._roles.clear();
+    for (const clearBtn of this._btnOwners.values()) clearBtn();
+    this._btnOwners.clear();
+    this.input.mouseDown = false;
+    this.input.jump = false;
   }
 
   _updateSens() {
@@ -61,22 +98,25 @@ export class TouchControls {
     const held = (id, on, off) => {
       const el = document.getElementById(id);
       let owner = null;
+      const clear = () => { if (owner === null) return; owner = null; el.classList.remove('held'); off(); };
       el.addEventListener('pointerdown', (e) => {
         e.preventDefault(); e.stopPropagation();
         if (owner !== null) return;
         owner = e.pointerId;
         try { el.setPointerCapture?.(e.pointerId); } catch { /* synthetic pointer */ }
+        // register so the global release sweep / reset can also clear it
+        this._btnOwners.set(e.pointerId, clear);
         el.classList.add('held');
         on(e);
       }, { passive: false });
       const release = (e) => {
         if (e.pointerId !== owner) return;
-        owner = null;
-        el.classList.remove('held');
-        off(e);
+        this._btnOwners.delete(e.pointerId);
+        clear();
       };
       el.addEventListener('pointerup', release);
       el.addEventListener('pointercancel', release);
+      el.addEventListener('lostpointercapture', release);
       return el;
     };
 
@@ -105,8 +145,14 @@ export class TouchControls {
 
   _bindCanvas(c) {
     c.addEventListener('pointerdown', (e) => {
+      // stale-id recovery: if this pointerId is somehow still assigned
+      // (reuse after a lost release), clear its old role first.
+      if (this._roles.has(e.pointerId)) this._end(e.pointerId);
+
       const stickZone = e.clientX < innerWidth * 0.45;
       const hasStick = [...this._roles.values()].includes('stick');
+      // capture on the canvas so this pointer's moves/up reliably return here
+      try { c.setPointerCapture?.(e.pointerId); } catch { /* synthetic */ }
       if (stickZone && !hasStick) {
         this._roles.set(e.pointerId, 'stick');
         this._stickOrigin = { x: e.clientX, y: e.clientY };
@@ -129,11 +175,9 @@ export class TouchControls {
       }
     });
 
-    const end = (e) => {
-      const role = this._roles.get(e.pointerId);
-      this._roles.delete(e.pointerId);
-      if (role === 'stick') this._stickReset();
-    };
+    // local canvas release; the window-level sweep also covers this so a
+    // release delivered off-canvas still clears the role.
+    const end = (e) => this._end(e.pointerId);
     c.addEventListener('pointerup', end);
     c.addEventListener('pointercancel', end);
   }
