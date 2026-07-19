@@ -148,7 +148,7 @@ export class Game {
 
   /* ---- lifecycle ---- */
   _showTouch() { if (this.mobile) document.getElementById('touch-controls').classList.remove('hidden'); }
-  startCampaign() { this.running = true; this.resetWeapon(); this.ambient.enable(); this.hud.hideMenu(); this._showTouch(); this.stages.startCampaign(0); }
+  startCampaign(stageIndex = 0) { this.running = true; this.resetWeapon(); this.ambient.enable(); this.hud.hideMenu(); this._showTouch(); this.stages.startCampaign(stageIndex); }
   startSkirmish() { this.running = true; this.resetWeapon(); this.ambient.enable(); this.hud.hideMenu(); this._showTouch(); this.stages.startSkirmish(); }
 
   _loop() {
