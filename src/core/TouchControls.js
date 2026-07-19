@@ -39,6 +39,7 @@ export class TouchControls {
     this._btnOwners = new Map();        // pointerId -> clear() for a held button
     this._stickOrigin = { x: 0, y: 0 };
     this._lookLast = { x: 0, y: 0 };
+    this._stickStamp = 0;               // last time the stick pointer spoke
 
     this._bindButtons();
     this._bindCanvas(canvas);
@@ -150,10 +151,19 @@ export class TouchControls {
       if (this._roles.has(e.pointerId)) this._end(e.pointerId);
 
       const stickZone = e.clientX < innerWidth * 0.45;
-      const hasStick = [...this._roles.values()].includes('stick');
+      let hasStick = [...this._roles.values()].includes('stick');
+      // last-resort backstop: iOS never reuses pointerIds, so a truly
+      // dropped pointerup leaves a stick no sweep can clear. A stick that
+      // has been silent for 2s is dead — the player's natural re-grab tap
+      // in the stick zone steals it.
+      if (stickZone && hasStick && performance.now() - this._stickStamp > 2000) {
+        for (const [id, r] of [...this._roles]) if (r === 'stick') this._end(id);
+        hasStick = false;
+      }
       // capture on the canvas so this pointer's moves/up reliably return here
       try { c.setPointerCapture?.(e.pointerId); } catch { /* synthetic */ }
       if (stickZone && !hasStick) {
+        this._stickStamp = performance.now();
         this._roles.set(e.pointerId, 'stick');
         this._stickOrigin = { x: e.clientX, y: e.clientY };
         this.stick.style.left = e.clientX + 'px';
@@ -183,6 +193,7 @@ export class TouchControls {
   }
 
   _stickMove(e) {
+    this._stickStamp = performance.now();
     let dx = e.clientX - this._stickOrigin.x, dy = e.clientY - this._stickOrigin.y;
     const len = Math.hypot(dx, dy);
     if (len > STICK_MAX) { dx *= STICK_MAX / len; dy *= STICK_MAX / len; }

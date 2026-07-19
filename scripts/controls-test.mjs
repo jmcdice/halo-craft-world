@@ -113,6 +113,42 @@ checks.jumpPressed = (await input()).jump === true;
 await pev('tc-jump', 'pointerup', 4, 700, 330);
 checks.jumpReleased = (await input()).jump === false;
 
+/* ---- stuck-pointer recovery (phantom-walking regression) ---- */
+// 1) pointerup that lands on the window, not the canvas, must still release
+await pev('scene', 'pointerdown', 10, 100, 300);
+await pev('scene', 'pointermove', 10, 100, 250);
+checks.preSweepDriving = (await input()).axisF > 0.5;
+await page.evaluate(() => window.dispatchEvent(new PointerEvent('pointerup', { pointerId: 10, pointerType: 'touch' })));
+checks.windowSweepReleases = (await input()).axisF === 0;
+
+// 2) pointerId reuse after a dropped up: old role cleared, new grab works
+await pev('scene', 'pointerdown', 11, 100, 300);
+await pev('scene', 'pointermove', 11, 100, 250);          // driving forward... up is never delivered
+await pev('scene', 'pointerdown', 11, 120, 320);          // same id comes back down
+checks.staleReuseResets = (await input()).axisF === 0;     // fresh origin, no phantom input
+await pev('scene', 'pointermove', 11, 120, 270);
+checks.staleReuseDrives = (await input()).axisF > 0.5;
+await pev('scene', 'pointerup', 11, 120, 270);
+
+// 3) dropped up with a NEVER-reused id (iOS): re-grab tap steals the dead stick
+await pev('scene', 'pointerdown', 21, 100, 300);
+await pev('scene', 'pointermove', 21, 100, 340);          // walking backwards...
+checks.preStealStuck = (await input()).axisF < -0.5;
+await page.waitForTimeout(2200);                           // stick goes silent past the 2s staleness window
+await pev('scene', 'pointerdown', 22, 110, 300);           // player taps the stick zone again
+checks.staleStealResets = (await input()).axisF === 0;
+await pev('scene', 'pointermove', 22, 110, 250);
+checks.staleStealDrives = (await input()).axisF > 0.5;
+await pev('scene', 'pointerup', 22, 110, 250);
+
+// 4) losing the tab releases everything at once
+await pev('scene', 'pointerdown', 30, 100, 300);
+await pev('scene', 'pointermove', 30, 100, 250);
+await pev('tc-fire', 'pointerdown', 31, 780, 250);
+await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+s = await input();
+checks.blurReleasesAll = s.axisF === 0 && s.fire === false;
+
 // ---- spawn clearance: no enemy may materialize inside a tree/rock ----
 const spawns = await page.evaluate(() => {
   const g = window.__game, w = g.world;
