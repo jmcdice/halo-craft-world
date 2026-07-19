@@ -149,6 +149,48 @@ await page.evaluate(() => window.dispatchEvent(new Event('blur')));
 s = await input();
 checks.blurReleasesAll = s.axisF === 0 && s.fire === false;
 
+/* ---- gamepad (faked via navigator.getGamepads) ---- */
+await page.evaluate(() => {
+  window.__pad = { connected: true, id: 'FakePad', mapping: 'standard',
+    axes: [0, 0, 0, 0],
+    buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })) };
+  navigator.getGamepads = () => [window.__pad];
+  window.__game.input.locked = true;
+});
+const poll = (n = 3) => page.evaluate((n) => { for (let i = 0; i < n; i++) window.__game.input.pollGamepad(1 / 60); }, n);
+// left stick drives movement through the deadzone curve
+await page.evaluate(() => { window.__pad.axes[1] = -1; });   // stick up = forward
+await poll();
+checks.padStickDrives = (await input()).axisF > 0.9;
+await page.evaluate(() => { window.__pad.axes[1] = 0; });
+await poll();
+checks.padStickReleases = (await input()).axisF === 0;
+// small deflection inside the deadzone does nothing
+await page.evaluate(() => { window.__pad.axes[1] = -0.1; });
+await poll();
+checks.padDeadzone = (await input()).axisF === 0;
+await page.evaluate(() => { window.__pad.axes[1] = 0; });
+// right stick queues look
+await page.evaluate(() => { window.__game.input.consumeLook(); window.__pad.axes[2] = 1; });
+await poll();
+checks.padLook = (await input()).lookX > 0;
+await page.evaluate(() => { window.__pad.axes[2] = 0; window.__game.input.consumeLook(); });
+// RT fires, A jumps, release clears both
+await page.evaluate(() => { window.__pad.buttons[7].value = 1; window.__pad.buttons[0].pressed = true; });
+await poll();
+s = await input();
+checks.padFireJump = s.fire === true && s.jump === true;
+await page.evaluate(() => { window.__pad.buttons[7].value = 0; window.__pad.buttons[0].pressed = false; });
+await poll();
+s = await input();
+checks.padRelease = s.fire === false && s.jump === false;
+// an idle pad must NOT clobber touch input (last active device wins)
+await pev('scene', 'pointerdown', 40, 100, 300);
+await pev('scene', 'pointermove', 40, 100, 250);
+await poll();
+checks.padDoesntClobberTouch = (await input()).axisF > 0.5;
+await pev('scene', 'pointerup', 40, 100, 250);
+
 // ---- spawn clearance: no enemy may materialize inside a tree/rock ----
 const spawns = await page.evaluate(() => {
   const g = window.__game, w = g.world;

@@ -42,6 +42,7 @@ export class Game {
 
     this.input = new Input(this.canvas, this.mobile);
     this.input.onReload = () => this.reload();
+    this._aimV = new THREE.Vector3();
     this.world = new World(this.renderer, this.scene, this.camera, this.mobile);
     this.player = new Player(this.world, this.camera, this.input);
     this.projectiles = new ProjectileManager(this.scene, this.world);
@@ -51,6 +52,7 @@ export class Game {
     this.cortana = new Cortana(document.getElementById('cortana'), document.getElementById('cortana-text'));
     this.ambient = new Ambient();
     this.dropships.onDeliver = () => this.ambient.rumble();
+    this.input.gamepad.onStatus = (msg) => this.hud.toast(msg);
     this.stages = new StageManager(this);
 
     this._buildViewModel();
@@ -99,6 +101,22 @@ export class Game {
     this.muzzleFlash = new THREE.PointLight(0x9ff, 0, 6, 2);
     this.muzzleFlash.position.set(0, 0.02, -0.8);
     g.add(this.muzzleFlash);
+  }
+
+  /* sticky aim for controller look: slow the reticle near live targets */
+  _stickyAim() {
+    if (!this.input.gamepad.connected) return 1;
+    this.camera.getWorldDirection(this._dir);
+    let best = 1e9;
+    for (const e of this.enemies.list) {
+      if (!e.alive) continue;
+      this._aimV.set(e.position.x, e.position.y + e.height * 0.6, e.position.z).sub(this.camera.position);
+      const d = this._aimV.length();
+      if (d < 1 || d > 90) continue;
+      const ang = this._dir.angleTo(this._aimV.normalize());
+      if (ang < best) best = ang;
+    }
+    return best < 0.06 ? 0.45 : best < 0.14 ? 0.72 : 1;
   }
 
   _onResize() {
@@ -158,6 +176,8 @@ export class Game {
     const time = performance.now();
 
     if (this.running && this.stages.active && this.input.locked) {
+      this.input.gamepad.aimFriction = this._stickyAim();
+      this.input.pollGamepad(dt);
       this.player.update(dt);
       if (this.input.mouseDown) this.fire(time);
       this.dropships.update(dt, time);
