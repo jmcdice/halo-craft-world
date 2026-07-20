@@ -208,9 +208,13 @@ export class CrashCutscene {
     cam.position.z += (Math.random() - 0.5) * amt;
   }
 
-  /* jump straight to the end state (tap/key to skip) */
-  skip() {
+  /* jump straight to the end state (tap/key to skip).
+     A stray tap right after DEPLOY used to skip the scene at frame zero
+     ("cutscene never played") — so user skips are ignored for the first
+     second. force=true (stage teardown) always finalizes. */
+  skip(force = false) {
     if (this.done) return;
+    if (!force && this.t < 1.0) return;
     if (!this.impacted) this._impact();
     if (this.dust) { this.props.remove(this.dust); this.dust = null; }
     this._finish();

@@ -477,7 +477,7 @@ export class StageManager {
     this.game.enemies.clear();
     this.game.projectiles.clear();
     this.game.dropships.clear();
-    if (this.game.cutscene) { this.game.cutscene.skip(); this.game.cutscene = null; }
+    if (this.game.cutscene) { this.game.cutscene.skip(true); this.game.cutscene = null; }
     if (this._cutsceneProps) { this.game.scene.remove(this._cutsceneProps); this._cutsceneProps = null; }
     for (const c of this.collectibles) this.game.scene.remove(c.mesh);
     this.collectibles.length = 0;
