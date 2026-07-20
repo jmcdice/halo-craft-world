@@ -25,6 +25,9 @@ setTimeout(() => {
   menu.classList.remove('hidden');
 }, 900);
 
+// first interaction is the browser's audio gesture: bring the choir in at the menu
+menu.addEventListener('pointerdown', () => game.ambient.enable(), { once: true });
+
 document.getElementById('btn-campaign').addEventListener('click', () => game.startCampaign());
 document.getElementById('btn-skirmish').addEventListener('click', () => game.startSkirmish());
 

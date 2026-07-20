@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { STAGES } from './stages.js';
+import { CrashCutscene } from './Cutscene.js';
 
 /* ============================================================
    StageManager — loads campaign stages, resolves anchors,
@@ -144,7 +145,23 @@ export class StageManager {
     this.game.hud.hideBriefing();
     this.game.hud.showHud();
     this.game.input.requestLock();
-    if (this._pendingIntro) { this.game.cortana.say(this._pendingIntro); this._pendingIntro = null; }
+    const intro = this._pendingIntro; this._pendingIntro = null;
+    if (this.stage?.cutscene === 'crash' && this.mode === 'campaign') {
+      // marooned: watch your own pod come down over the water and plough
+      // into the beach — open ground, so the camera never sits in a tree
+      const p = this.game.player.position;
+      const a = Math.atan2(p.z, p.x);
+      const shoreR = this.game.world.shoreRadiusAt(a) + 7;
+      let landing = { x: Math.cos(a) * shoreR, z: Math.sin(a) * shoreR };
+      landing = this.game.world.findClear(landing.x, landing.z, 9, 26);
+      const cs = new CrashCutscene(this.game,
+        new THREE.Vector3(landing.x, 0, landing.z),
+        () => { if (intro) this.game.cortana.say(intro); });
+      this._cutsceneProps = cs.props;
+      this.game.cutscene = cs;
+    } else if (intro) {
+      this.game.cortana.say(intro);
+    }
     this._refreshHud();
   }
 
@@ -460,6 +477,8 @@ export class StageManager {
     this.game.enemies.clear();
     this.game.projectiles.clear();
     this.game.dropships.clear();
+    if (this.game.cutscene) { this.game.cutscene.skip(); this.game.cutscene = null; }
+    if (this._cutsceneProps) { this.game.scene.remove(this._cutsceneProps); this._cutsceneProps = null; }
     for (const c of this.collectibles) this.game.scene.remove(c.mesh);
     this.collectibles.length = 0;
     for (const o of this.objectives) if (o.ring) this.game.scene.remove(o.ring);

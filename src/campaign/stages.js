@@ -27,11 +27,13 @@ export const STAGES = [
     subtitle: 'INSTALLATION 04 — 06:20',
     tod: 0.18, fog: 0.5, waves: 0.30,
     start: 'start',
+    cutscene: 'crash',
     intro: [
-      'Spartan, you’re awake. Good.',
-      'We came down hard on the ring. This lake basin is our landing zone.',
+      '…Chief? Chief! Systems back online. You’re awake — good.',
+      'We came down hard. The pod’s scrap, and nobody knows we’re here.',
+      'We’re marooned, Spartan. This lake basin is home until I say otherwise.',
       'Get your bearings — move to the dock marked on your HUD.',
-      'And stay sharp. We were not a quiet crash.',
+      'And stay sharp. That was not a quiet landing.',
     ],
     outro: ['Beachhead secured. Nicely done, Chief.'],
     objectives: [

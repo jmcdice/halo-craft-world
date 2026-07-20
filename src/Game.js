@@ -68,7 +68,8 @@ export class Game {
     this._dir = new THREE.Vector3();
 
     addEventListener('resize', () => this._onResize());
-    addEventListener('keydown', (e) => { if (e.code === 'KeyR') this.reload(); });
+    addEventListener('keydown', (e) => { if (e.code === 'KeyR') this.reload(); if (this.cutscene) this.cutscene.skip(); });
+    this.canvas.addEventListener('pointerdown', () => { if (this.cutscene) this.cutscene.skip(); });
     this.canvas.addEventListener('click', () => { if (this.running && !this.input.locked) this.input.requestLock(); });
 
     this._loop = this._loop.bind(this);
@@ -175,7 +176,10 @@ export class Game {
     const t = this.clock.elapsedTime;
     const time = performance.now();
 
-    if (this.running && this.stages.active && this.input.locked) {
+    if (this.cutscene) {
+      // scripted camera owns the frame; world keeps breathing underneath
+      if (!this.cutscene.update(dt, time)) this.cutscene = null;
+    } else if (this.running && this.stages.active && this.input.locked) {
       this.input.gamepad.aimFriction = this._stickyAim();
       this.input.pollGamepad(dt);
       this.player.update(dt);
