@@ -70,6 +70,24 @@ const dump = async (label) => console.log(label, JSON.stringify(await ev(() => (
 
 /* ---------- STAGE 1: Landfall ---------- */
 checks.s1_title = await ev(() => window.__game.stages.stage.title === 'Landfall');
+// crash-landing cutscene: starts on deploy, plays out, leaves the pod behind
+checks.s1_cutsceneStarts = await ev(() => {
+  const g = window.__game;
+  return !!g.cutscene && g.cutscene.done === false &&
+    document.getElementById('cine').classList.contains('show');
+});
+checks.s1_cutsceneFinishes = await ev(() => {
+  const g = window.__game;
+  let guard = 0;
+  while (g.cutscene && !g.cutscene.done && guard++ < 300) g.cutscene.update(0.1, performance.now() + guard * 100);
+  return guard < 300 && g.cutscene?.done !== false &&
+    !document.getElementById('cine').classList.contains('show');
+});
+checks.s1_crashPodRemains = await ev(() => {
+  const props = window.__game.stages._cutsceneProps;
+  return !!props && props.parent === window.__game.scene;
+});
+await ev(() => { window.__game.cutscene = null; });   // what the rAF loop would do
 // drones are deferred until the dock is reached
 checks.s1_dronesDeferred = await ev(() => window.__game.enemies.aliveCount === 0);
 // walk into the midway ambush zone -> phantom event fires

@@ -16,6 +16,18 @@ const CHORDS = [
 /* combat ostinato notes (D natural minor, mid-low) */
 const OSTINATO = [73.42, 87.31, 110.0, 87.31, 73.42, 98.0, 87.31, 65.41];
 
+/* the chant — original melody in the Halo idiom: slow, modal, D minor.
+   Each phrase is [frequency, beats]; voices sing it in octaves + a quiet fifth. */
+const D3 = 146.83, A3 = 220.0, C4 = 261.63, D4 = 293.66, E4 = 329.63, F4 = 349.23, G4 = 392.0;
+const PHRASES = [
+  [[D4, 2], [F4, 1], [E4, 1], [D4, 2], [C4, 1], [D4, 2.5]],
+  [[A3, 2], [C4, 1], [D4, 1], [E4, 2], [F4, 1], [E4, 1], [D4, 3]],
+  [[F4, 2], [G4, 1], [F4, 1], [E4, 2], [C4, 1], [D4, 3]],
+  [[D4, 1], [E4, 1], [F4, 2], [E4, 1], [D4, 1], [A3, 2.5]],
+];
+/* "ah" vowel formants: [freq, gain, Q] */
+const FORMANTS = [[700, 1.0, 8], [1080, 0.45, 9], [2500, 0.14, 11]];
+
 export class Ambient {
   constructor() {
     this.ctx = null;
@@ -23,9 +35,11 @@ export class Ambient {
     this.enabled = false;
     this.birdTimer = null;
     this.musicTimer = null;
+    this.chantTimer = null;
     this._intensity = 0;
     this._chordIdx = 0;
     this._ostStep = 0;
+    this._phraseIdx = 0;
   }
 
   init() {
@@ -89,6 +103,103 @@ export class Ambient {
     // combat ostinato bus — silent until intensity rises
     this.combatGain = ctx.createGain(); this.combatGain.gain.value = 0;
     this.combatGain.connect(this.musicBus);
+
+    // ---- the choir: formant voices through a cathedral ----
+    this.chantGain = ctx.createGain(); this.chantGain.gain.value = 0.16;
+    const dry = ctx.createGain(); dry.gain.value = 0.35;
+    this.verb = ctx.createConvolver(); this.verb.buffer = this._impulse(2.8, 2.4);
+    const wet = ctx.createGain(); wet.gain.value = 0.95;
+    this.chantGain.connect(dry).connect(this.musicBus);
+    this.chantGain.connect(this.verb); this.verb.connect(wet).connect(this.musicBus);
+  }
+
+  /* synthetic cathedral impulse response: decaying stereo noise */
+  _impulse(seconds, decay) {
+    const ctx = this.ctx, len = Math.floor(ctx.sampleRate * seconds);
+    const buf = ctx.createBuffer(2, len, ctx.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = buf.getChannelData(ch);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+    }
+    return buf;
+  }
+
+  /* one choir voice: detuned saws -> "ah" formant filters -> swelling envelope */
+  _voice(freq, t0, dur, vol) {
+    const ctx = this.ctx;
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0, t0);
+    env.gain.linearRampToValueAtTime(vol, t0 + Math.min(0.5, dur * 0.4));
+    env.gain.setValueAtTime(vol, t0 + dur - 0.15);
+    env.gain.linearRampToValueAtTime(0, t0 + dur + 0.7);
+    env.connect(this.chantGain);
+
+    const oscs = [];
+    for (const det of [0, 7, -6]) {
+      const o = ctx.createOscillator();
+      o.type = 'sawtooth'; o.frequency.value = freq; o.detune.value = det;
+      oscs.push(o);
+    }
+    // slow vocal vibrato, easing in
+    const vib = ctx.createOscillator(); vib.frequency.value = 4.6;
+    const vibG = ctx.createGain();
+    vibG.gain.setValueAtTime(0, t0);
+    vibG.gain.linearRampToValueAtTime(5, t0 + 0.8);
+    vib.connect(vibG);
+    for (const o of oscs) vibG.connect(o.detune);
+
+    const src = ctx.createGain(); src.gain.value = 0.32;
+    for (const o of oscs) o.connect(src);
+    for (const [f, g, q] of FORMANTS) {
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = q;
+      const fg = ctx.createGain(); fg.gain.value = g;
+      src.connect(bp).connect(fg).connect(env);
+    }
+    const stop = t0 + dur + 0.8;
+    vib.start(t0); vib.stop(stop);
+    for (const o of oscs) { o.start(t0); o.stop(stop); }
+  }
+
+  /* sing the next phrase, then rest; loops while enabled */
+  _chant() {
+    if (!this.enabled) return;
+    const ctx = this.ctx, beat = 1.18;
+    const phrase = PHRASES[this._phraseIdx++ % PHRASES.length];
+    let t = ctx.currentTime + 0.1;
+    for (const [f, b] of phrase) {
+      const dur = b * beat;
+      this._voice(f, t, dur, 0.5);          // lead
+      this._voice(f / 2, t, dur, 0.42);     // basses an octave down
+      this._voice(f * 1.5, t + 0.03, dur, 0.13);   // faint fifth above
+      t += dur;
+    }
+    const gap = 2.5 + Math.random() * 3.5;
+    this.chantTimer = setTimeout(() => this._chant(), (t - ctx.currentTime + gap) * 1000);
+  }
+
+  /* deep impact for the crash landing */
+  boom() {
+    if (!this.ctx) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(82, t);
+    o.frequency.exponentialRampToValueAtTime(24, t + 0.9);
+    g.gain.setValueAtTime(0.55, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.3);
+    o.connect(g).connect(this.master);
+    o.start(t); o.stop(t + 1.4);
+    const len = ctx.sampleRate * 0.7, buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.2);
+    const n = ctx.createBufferSource(); n.buffer = buf;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(900, t); lp.frequency.exponentialRampToValueAtTime(120, t + 0.6);
+    const ng = ctx.createGain(); ng.gain.setValueAtTime(0.4, t);
+    ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.7);
+    n.connect(lp).connect(ng).connect(this.master);
+    n.start(t);
   }
 
   _chordDrift() {
@@ -140,6 +251,8 @@ export class Ambient {
     const t = this.ctx.currentTime;
     this.combatGain.gain.setTargetAtTime(this._intensity * 0.9, t, 1.2);
     this.padFilter.frequency.setTargetAtTime(340 + this._intensity * 420, t, 1.5);
+    // the monks step back while the shooting is happening
+    this.chantGain.gain.setTargetAtTime(0.16 * (1 - this._intensity * 0.85), t, 1.0);
   }
 
   enable() {
@@ -151,6 +264,8 @@ export class Ambient {
     this._chirp();
     clearTimeout(this.musicTimer);
     this._beat();
+    clearTimeout(this.chantTimer);
+    this._chant();
   }
 
   _chirp() {
